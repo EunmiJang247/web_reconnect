@@ -1,0 +1,99 @@
+/* Font Awesome Icons - Offline Version */
+@font-face {
+  font-family: "Font Awesome 6 Free";
+  font-style: normal;
+  font-weight: 900;
+  font-display: block;
+  src: url("data:font/woff2;base64,d09GMgABAAAAAGQ8AA0AAAAAroAAAGPfAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAABmAAgkAc")
+    format("woff2");
+}
+
+.fas {
+  font-family: "Font Awesome 6 Free";
+  font-weight: 900;
+  font-style: normal;
+  display: inline-block;
+  line-height: 1;
+  text-rendering: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Icon definitions */
+.fa-gas-pump:before {
+  content: "\f52f";
+}
+.fa-circle:before {
+  content: "\f111";
+}
+.fa-cog:before {
+  content: "\f013";
+}
+.fa-sync-alt:before {
+  content: "\f2f1";
+}
+.fa-spinner:before {
+  content: "\f110";
+}
+.fa-exclamation-triangle:before {
+  content: "\f071";
+}
+.fa-retry:before {
+  content: "\f2f1";
+}
+.fa-sensors:before {
+  content: "\e02c";
+}
+.fa-sensors-off:before {
+  content: "\e02d";
+}
+.fa-sliders-h:before {
+  content: "\f1de";
+}
+.fa-fire:before {
+  content: "\f06d";
+}
+.fa-wind:before {
+  content: "\f72e";
+}
+.fa-cloud:before {
+  content: "\f0c2";
+}
+.fa-warning:before {
+  content: "\f071";
+}
+.fa-local-fire-department:before {
+  content: "\f06d";
+}
+.fa-air:before {
+  content: "\f72e";
+}
+.fa-bubble-chart:before {
+  content: "\f111";
+}
+.fa-save:before {
+  content: "\f0c7";
+}
+.fa-info:before {
+  content: "\f129";
+}
+.fa-computer:before {
+  content: "\f109";
+}
+.fa-router:before {
+  content: "\f6fc";
+}
+
+/* Spinning animation for spinner */
+.fa-spin {
+  animation: fa-spin 2s infinite linear;
+}
+
+@keyframes fa-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}

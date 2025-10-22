@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>가스 모니터링 시스템</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="fontawesome.css" />
+  </head>
+  <body>
+    <div class="app">
+      <!-- 헤더 -->
+      <header class="header">
+        <div class="header-content">
+          <h1>가스 모니터링 시스템</h1>
+          <div class="header-controls">
+            <div class="connection-status" id="connectionStatus">
+              <span class="status-text">센서 정보 로딩중...</span>
+            </div>
+            <button class="btn btn-secondary" id="settingsBtn">설정</button>
+            <button class="btn btn-primary" id="reconnectBtn">재연결</button>
+          </div>
+        </div>
+      </header>
+
+      <!-- 메인 컨텐츠 -->
+      <main class="main-content">
+        <!-- 로딩 상태 -->
+        <div class="loading-container" id="loadingContainer">
+          <div class="loading-spinner"></div>
+          <p>센서 정보를 불러오는 중...</p>
+        </div>
+
+        <!-- 센서 그리드 -->
+        <div class="sensor-grid" id="sensorGrid" style="display: none">
+          <!-- 센서 카드들이 동적으로 생성됩니다 -->
+        </div>
+
+        <!-- 에러 메시지 -->
+        <div class="error-container" id="errorContainer" style="display: none">
+          <div class="error-content">
+            <h3>연결 오류</h3>
+            <p id="errorMessage">센서 서버에 연결할 수 없습니다.</p>
+            <button class="btn btn-primary" onclick="loadSensors()">
+              다시 시도
+            </button>
+          </div>
+        </div>
+      </main>
+
+      <!-- 마지막 업데이트 시간 -->
+      <footer class="footer">
+        <div class="footer-content">
+          <span>마지막 업데이트: <span id="lastUpdateTime">--</span></span>
+          <span>총 센서 수: <span id="totalSensors">0</span>개</span>
+        </div>
+      </footer>
+    </div>
+
+    <!-- 설정 모달 -->
+    <div class="modal" id="settingsModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>설정</h2>
+          <button class="modal-close" id="closeModal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="settings-section">
+            <h3>서버 설정</h3>
+            <div class="form-group">
+              <label for="serverIp">서버 IP</label>
+              <input
+                type="text"
+                id="serverIp"
+                value="localhost"
+                placeholder="예: 192.168.0.224"
+              />
+            </div>
+            <div class="form-group">
+              <label for="serverPort">서버 Port</label>
+              <input
+                type="text"
+                id="serverPort"
+                value="8081"
+                placeholder="예: 8080"
+              />
+            </div>
+            <div class="connection-info">
+              <h4>연결 정보</h4>
+              <p>
+                API:
+                <span id="apiUrl"
+                  >http://localhost:8081/api/sensor/mappings</span
+                >
+              </p>
+              <p>
+                WebSocket: <span id="wsUrl">ws://localhost:8081/ws/sensor</span>
+              </p>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>센서 목록 (<span id="sensorCount">0</span>개)</h3>
+            <div class="sensor-list" id="sensorList">
+              <div class="no-sensors">
+                <p>등록된 센서가 없습니다</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="cancelBtn">취소</button>
+          <button class="btn btn-primary" id="saveBtn">저장</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 임계치 설정 모달 -->
+    <div class="modal" id="thresholdModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>임계치 설정</h2>
+          <button class="modal-close" id="closeThresholdModal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div id="thresholdContent">
+            <!-- 임계치 설정 내용이 동적으로 생성됩니다 -->
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="cancelThresholdBtn">
+            취소
+          </button>
+          <button class="btn btn-primary" id="saveThresholdBtn">저장</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="sensor-info.js"></script>
+    <script src="websocket-client.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
