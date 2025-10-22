@@ -532,12 +532,12 @@ function createSensorGroupCard(sensorId, sensor) {
             </h3>
             <div class="sensor-actions">
                 <button class="btn btn-secondary" onclick="openThresholdModal('${sensorId}', 'composite')">
-                    
+                  임계치 설정
                 </button>
             </div>
         </div>
         
-        <div class="sensor-status status-${groupStatus}">
+        <div class="sensor-status space-below status-${groupStatus}">
             <span>${groupStatusText}</span>
         </div>
         
@@ -717,7 +717,7 @@ function createThresholdSection(sensorId, gasType) {
   section.className = "threshold-section";
   section.innerHTML = `
         <h4>
-            <i class="${threshold?.icon || "fas fa-cog"}"></i>
+            
             ${formatGasName(gasType)} 임계치 설정
         </h4>
         <div class="threshold-grid">

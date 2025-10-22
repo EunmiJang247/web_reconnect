@@ -318,6 +318,10 @@ body {
   font-family: "Noto Sans KR", "Roboto", sans-serif;
 }
 
+.space-below {
+  margin-bottom: 8px;
+}
+
 .sensor-status.status-normal {
   background: rgba(39, 174, 96, 0.1);
   color: #27ae60;
