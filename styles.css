@@ -829,3 +829,207 @@ body {
     font-size: 2rem;
   }
 }
+
+/* 여기서부터 추가*/
+
+/* 출입 상태 메시지 */
+.access-status {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 1rem 2rem;
+  border-radius: 25px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-family: "Noto Sans KR", "Roboto", sans-serif;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(10px);
+  z-index: 100;
+  transition: all 0.3s ease;
+}
+
+.access-status.safe {
+  background: linear-gradient(135deg, #27ae60, #2ecc71);
+  color: white;
+  animation: pulse-safe 2s ease-in-out infinite;
+}
+
+.access-status.danger {
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  color: white;
+  animation: pulse-danger-access 2s ease-in-out infinite;
+}
+
+.access-status i {
+  font-size: 1.3rem;
+}
+
+/* 임계치 설정 버튼 */
+.threshold-btn {
+  background: linear-gradient(135deg, #8e44ad, #9b59b6);
+  color: white;
+  border: none;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.threshold-btn:hover {
+  background: linear-gradient(135deg, #7d3c98, #8e44ad);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(142, 68, 173, 0.3);
+}
+
+/* 전체 시스템 상태 카드 */
+.system-status-card {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.system-status-card.safe {
+  border-left: 4px solid #27ae60;
+  background: linear-gradient(
+    135deg,
+    rgba(39, 174, 96, 0.05),
+    rgba(46, 204, 113, 0.05)
+  );
+}
+
+.system-status-card.warning {
+  border-left: 4px solid #f39c12;
+  background: linear-gradient(
+    135deg,
+    rgba(243, 156, 18, 0.05),
+    rgba(230, 126, 34, 0.05)
+  );
+}
+
+.system-status-card.danger {
+  border-left: 4px solid #e74c3c;
+  background: linear-gradient(
+    135deg,
+    rgba(231, 76, 60, 0.05),
+    rgba(192, 57, 43, 0.05)
+  );
+}
+
+.system-status-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+}
+
+.system-status-title.safe {
+  color: #27ae60;
+}
+
+.system-status-title.danger {
+  color: #e74c3c;
+}
+
+.system-status-message {
+  font-size: 1.1rem;
+  font-weight: 500;
+  margin-bottom: 1rem;
+}
+
+.system-status-details {
+  font-size: 0.9rem;
+  color: #7f8c8d;
+}
+
+/* 애니메이션 추가 */
+@keyframes pulse-safe {
+  0%,
+  100% {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  }
+  50% {
+    box-shadow: 0 4px 25px rgba(39, 174, 96, 0.4);
+  }
+}
+
+@keyframes pulse-danger-access {
+  0%,
+  100% {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  }
+  50% {
+    box-shadow: 0 4px 25px rgba(231, 76, 60, 0.5);
+  }
+}
+
+/* 반응형 디자인 추가 */
+@media (max-width: 768px) {
+  .access-status {
+    bottom: 1rem;
+    left: 1rem;
+    right: 1rem;
+    transform: none;
+    text-align: center;
+  }
+
+  .system-status-card {
+    margin-bottom: 1rem;
+    padding: 1rem;
+  }
+
+  .system-status-title {
+    font-size: 1.1rem;
+  }
+
+  .system-status-message {
+    font-size: 1rem;
+  }
+}
+
+/* 전체 시스템 상태 카드 */
+.system-status-card {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.system-status-card.safe {
+  border-left: 4px solid #27ae60;
+  background: #ffffff; /* 순수한 화이트 배경으로 변경 */
+}
+
+.system-status-card.warning {
+  border-left: 4px solid #f39c12;
+  background: linear-gradient(
+    135deg,
+    rgba(243, 156, 18, 0.05),
+    rgba(230, 126, 34, 0.05)
+  );
+}
+
+.system-status-card.danger {
+  border-left: 4px solid #e74c3c;
+  background: linear-gradient(
+    135deg,
+    rgba(231, 76, 60, 0.05),
+    rgba(192, 57, 43, 0.05)
+  );
+}

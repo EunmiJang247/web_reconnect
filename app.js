@@ -388,6 +388,10 @@ function renderSensorCards() {
 
     grid.appendChild(cardElement);
   });
+
+  // 출입 상태 및 시스템 상태 업데이트
+  updateAccessStatus();
+  updateSystemStatusBanner();
 }
 
 // LEL 센서 카드 생성
@@ -432,13 +436,12 @@ function createLelSensorCard(sensorId, sensor) {
             </h3>
             <div class="sensor-actions">
                 <button class="btn btn-secondary" onclick="openThresholdModal('${sensorId}', 'lel')">
-                    
+                    임계치 설정
                 </button>
             </div>
         </div>
         
         <div class="sensor-status status-${status}">
-            
             <span>${statusText}</span>
         </div>
         
@@ -822,6 +825,142 @@ function manualReconnect() {
 
   // 센서 정보부터 다시 로딩
   loadSensors();
+}
+
+// 출입 상태 관리 함수들
+function checkOverallSafetyStatus() {
+  let hasDanger = false;
+  let hasWarning = false;
+  let problemSensors = [];
+
+  // 복합가스센서들 상태 확인
+  for (const [sensorId, gasData] of sensorGroups.entries()) {
+    const sensor = sensors.find(
+      (s) => `${s.modelName}_${s.portName}` === sensorId
+    );
+    if (!sensor) continue;
+
+    ["CO", "O2", "H2S", "CO2"].forEach((gasType) => {
+      const status = calculateSensorGasStatus(
+        sensorId,
+        gasType,
+        gasData[gasType]
+      );
+      if (status === SensorStatus.DANGER) {
+        hasDanger = true;
+        problemSensors.push(`${sensor.displayName} ${formatGasName(gasType)}`);
+      } else if (status === SensorStatus.WARNING) {
+        hasWarning = true;
+      }
+    });
+  }
+
+  // LEL센서들 상태 확인
+  for (const [sensorId, lelData] of lelSensors.entries()) {
+    const sensor = sensors.find(
+      (s) => `${s.modelName}_${s.portName}` === sensorId
+    );
+    if (!sensor) continue;
+
+    const status = calculateSensorGasStatus(sensorId, "LEL", lelData.lel);
+    if (status === SensorStatus.DANGER) {
+      hasDanger = true;
+      problemSensors.push(`${sensor.displayName} LEL`);
+    } else if (status === SensorStatus.WARNING) {
+      hasWarning = true;
+    }
+  }
+
+  // 알람이 있는 센서들 확인
+  for (const [sensorId, alarmMessage] of sensorGroupAlarms.entries()) {
+    if (alarmMessage && alarmMessage.trim() !== "") {
+      const sensor = sensors.find(
+        (s) => `${s.modelName}_${s.portName}` === sensorId
+      );
+      if (sensor) {
+        hasDanger = true;
+        problemSensors.push(`${sensor.displayName} 알람`);
+      }
+    }
+  }
+
+  return {
+    isDangerous: hasDanger,
+    hasWarning: hasWarning,
+    problemSensors: problemSensors,
+  };
+}
+
+function updateAccessStatus() {
+  const safetyStatus = checkOverallSafetyStatus();
+
+  // 기존 출입 상태 요소 제거
+  const existingStatus = document.querySelector(".access-status");
+  if (existingStatus) {
+    existingStatus.remove();
+  }
+
+  // 새로운 출입 상태 요소 생성
+  const accessStatusEl = document.createElement("div");
+  accessStatusEl.className = "access-status";
+
+  // body에 추가
+  document.body.appendChild(accessStatusEl);
+}
+
+function updateSystemStatusBanner() {
+  const safetyStatus = checkOverallSafetyStatus();
+
+  // 기존 시스템 상태 배너 제거
+  const existingBanner = document.querySelector(".system-status-card");
+  if (existingBanner) {
+    existingBanner.remove();
+  }
+
+  // 새로운 시스템 상태 배너 생성
+  const bannerEl = document.createElement("div");
+  bannerEl.className = "system-status-card";
+
+  if (safetyStatus.isDangerous) {
+    bannerEl.classList.add("danger");
+    bannerEl.innerHTML = `
+      <div class="system-status-title danger">
+        <span>위험 상태</span>
+      </div>
+      <div class="system-status-message">
+        다음 센서에서 위험 수치가 감지되었습니다:
+      </div>
+      <div class="system-status-details">
+        ${safetyStatus.problemSensors.join(", ")}
+      </div>
+    `;
+  } else if (safetyStatus.hasWarning) {
+    bannerEl.classList.add("warning");
+    bannerEl.innerHTML = `
+      <div class="system-status-title" style="color: #f39c12;">
+        <span>주의 상태</span>
+      </div>
+      <div class="system-status-message">
+        일부 센서에서 경고 수치가 감지되었습니다. 주의하세요.
+      </div>
+    `;
+  } else {
+    bannerEl.classList.add("safe");
+    bannerEl.innerHTML = `
+      <div class="system-status-title safe">
+        <span>정상 상태</span>
+      </div>
+      <div class="system-status-message">
+        모든 센서가 정상 범위 내에 있습니다.
+      </div>
+    `;
+  }
+
+  // 메인 컨텐츠 상단에 추가
+  const mainContent = document.querySelector(".main-content");
+  if (mainContent) {
+    mainContent.insertBefore(bannerEl, mainContent.firstChild);
+  }
 }
 
 // 유틸리티 함수들
