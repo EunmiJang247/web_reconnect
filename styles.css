@@ -283,7 +283,6 @@ body {
   grid-template-columns: repeat(2, 1fr);
   grid-template-rows: repeat(2, 1fr);
   width: 100%;
-  height: calc(100vh - 200px); /* 헤더/푸터 공간 제외한 고정 높이 */
   gap: 1.5rem;
   overflow: hidden; /* 추가 카드가 있어도 보이지 않게 함 */
 }
