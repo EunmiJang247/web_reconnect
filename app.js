@@ -4,11 +4,21 @@ let sensorGroups = new Map(); // 복합가스센서용
 let lelSensors = new Map(); // LEL센서용
 let sensorGroupAlarms = new Map();
 let sensorThresholds = new Map(); // 센서별 개별 임계치
+let sensorCustomNames = new Map(); // 센서별 사용자 지정 이름 (시리얼번호 -> 이름)
 let serverIp = "localhost";
 let serverPort = "8081";
 let isLoadingSensors = false;
 let currentThresholdSensorId = null;
 let currentThresholdSensorType = null;
+
+// 전역 변수에 추가
+let reconnectAttempts = 0;
+let maxReconnectAttempts = 5;
+let reconnectInterval = 5000; // 5초
+let reconnectTimer = null;
+let sensorHealthCheck = new Map(); // 센서별 마지막 수신 시간
+let healthCheckInterval = null;
+let sensorListUpdateInterval = null;
 
 // DOM 요소
 const elements = {
@@ -34,8 +44,59 @@ document.addEventListener("DOMContentLoaded", function () {
   initializeElements();
   setupEventListeners();
   setupWebSocketCallbacks();
+  loadSensorCustomNames(); // 저장된 센서 이름 로드
   loadSensors();
 });
+
+// 센서 사용자 지정 이름 관리 함수들
+function loadSensorCustomNames() {
+  try {
+    const savedNames = localStorage.getItem("sensorCustomNames");
+    if (savedNames) {
+      const namesObj = JSON.parse(savedNames);
+      sensorCustomNames = new Map(Object.entries(namesObj));
+      console.log("저장된 센서 이름 로드:", sensorCustomNames);
+    }
+  } catch (error) {
+    console.error("센서 이름 로드 실패:", error);
+    sensorCustomNames = new Map();
+  }
+}
+
+function saveSensorCustomNames() {
+  try {
+    const namesObj = Object.fromEntries(sensorCustomNames);
+    localStorage.setItem("sensorCustomNames", JSON.stringify(namesObj));
+    console.log("센서 이름 저장 완료:", namesObj);
+  } catch (error) {
+    console.error("센서 이름 저장 실패:", error);
+  }
+}
+
+function generateSensorName(serialNumber, existingCount) {
+  // 이미 저장된 이름이 있으면 사용
+  if (sensorCustomNames.has(serialNumber)) {
+    return sensorCustomNames.get(serialNumber);
+  }
+
+  // 새로운 센서면 자동 이름 생성
+  const newName = `센서${existingCount + 1}`;
+  sensorCustomNames.set(serialNumber, newName);
+  saveSensorCustomNames();
+  return newName;
+}
+
+function updateSensorCustomName(serialNumber, newName) {
+  sensorCustomNames.set(serialNumber, newName);
+  saveSensorCustomNames();
+
+  // 해당 센서 찾아서 displayName 업데이트
+  const sensor = sensors.find((s) => s.serialNumber === serialNumber);
+  if (sensor) {
+    sensor.customName = newName;
+    renderSensorCards(); // UI 다시 렌더링
+  }
+}
 
 // DOM 요소 초기화
 function initializeElements() {
@@ -109,25 +170,542 @@ function setupEventListeners() {
 // WebSocket 콜백 설정
 function setupWebSocketCallbacks() {
   wsClient.onConnect = function () {
-    updateConnectionStatus("connected", `${sensors.length}개 센서 구독 완료`);
+    updateConnectionStatusWithSensorCount();
     subscribeToAllSensors();
+
+    // 재연결 성공 시 카운터 리셋
+    reconnectAttempts = 0;
+    clearTimeout(reconnectTimer);
+
+    // 센서 헬스 체크 시작
+    startSensorHealthCheck();
+
+    // 센서 목록 주기적 업데이트 시작
+    startSensorListMonitoring();
   };
 
   wsClient.onDisconnect = function () {
     updateConnectionStatus("disconnected", "연결 끊어짐");
+
+    // 헬스 체크 중지
+    stopSensorHealthCheck();
+
+    // 센서 목록 모니터링 중지
+    stopSensorListMonitoring();
+
+    // 자동 재연결 시도
+    attemptReconnect();
   };
 
   wsClient.onError = function (error) {
     updateConnectionStatus(
       "disconnected",
-      `연결 오류: ${error.message || error}`
+      `서버가 끊겼습니다! mapping정보 가져오기 에러: ${error.message || error}`
     );
+
+    // 헬스 체크 중지
+    stopSensorHealthCheck();
+
+    // 센서 목록 모니터링 중지
+    stopSensorListMonitoring();
+
+    // 자동 재연결 시도
+    attemptReconnect();
   };
 
   wsClient.onMessage = function (destination, body, headers) {
     handleSensorMessage(destination, body);
+
+    // 센서 헬스 체크 업데이트
+    updateSensorHealth(destination);
   };
 }
+
+// 자동 재연결 함수
+function attemptReconnect() {
+  if (reconnectAttempts >= maxReconnectAttempts) {
+    updateConnectionStatus(
+      "disconnected",
+      `재연결 실패 (${maxReconnectAttempts}회 시도)`
+    );
+    console.error(
+      `최대 재연결 시도 횟수(${maxReconnectAttempts})에 도달했습니다.`
+    );
+    return;
+  }
+
+  reconnectAttempts++;
+  const waitTime = reconnectInterval * reconnectAttempts; // 지수 백오프
+
+  updateConnectionStatus(
+    "loading",
+    `재연결 시도 중... (${reconnectAttempts}/${maxReconnectAttempts})`
+  );
+
+  console.log(
+    `${
+      waitTime / 1000
+    }초 후 재연결 시도 (${reconnectAttempts}/${maxReconnectAttempts})`
+  );
+
+  reconnectTimer = setTimeout(() => {
+    console.log(`재연결 시도 ${reconnectAttempts}회차 시작`);
+
+    // 완전히 처음부터 다시 시작
+    resetAndReloadSensors();
+  }, waitTime);
+}
+
+// 센서 헬스 체크 시작
+function startSensorHealthCheck() {
+  // 기존 타이머 정리
+  stopSensorHealthCheck();
+
+  // 모든 센서의 마지막 수신 시간 초기화
+  sensors.forEach((sensor) => {
+    const sensorId = `${sensor.modelName}_${sensor.portName}`;
+    sensorHealthCheck.set(sensorId, Date.now());
+  });
+
+  // 30초마다 헬스 체크
+  healthCheckInterval = setInterval(checkSensorHealth, 30000);
+  console.log("센서 헬스 체크 시작 (30초 간격)");
+}
+
+// 센서 헬스 체크 중지
+function stopSensorHealthCheck() {
+  if (healthCheckInterval) {
+    clearInterval(healthCheckInterval);
+    healthCheckInterval = null;
+    console.log("센서 헬스 체크 중지");
+  }
+}
+
+// 센서 헬스 상태 업데이트
+function updateSensorHealth(destination) {
+  const sensor = sensors.find((s) => s.topicPath === destination);
+  if (sensor) {
+    const sensorId = `${sensor.modelName}_${sensor.portName}`;
+    sensorHealthCheck.set(sensorId, Date.now());
+  }
+}
+
+// 센서 헬스 체크 실행
+function checkSensorHealth() {
+  console.log("🔍 센서 헬스 체크 시작...");
+
+  const now = Date.now();
+  const timeoutThreshold = 60000; // 60초 타임아웃
+  let unhealthySensors = [];
+  let activeSensors = 0;
+
+  for (const [sensorId, lastSeen] of sensorHealthCheck.entries()) {
+    activeSensors++;
+    const timeSinceLastSeen = now - lastSeen;
+
+    if (timeSinceLastSeen > timeoutThreshold) {
+      const sensor = sensors.find(
+        (s) => `${s.modelName}_${s.portName}` === sensorId
+      );
+      if (sensor) {
+        unhealthySensors.push({
+          id: sensorId,
+          name: sensor.displayName,
+          lastSeen: Math.floor(timeSinceLastSeen / 1000),
+        });
+      }
+    }
+  }
+
+  console.log(
+    `📊 헬스 체크 결과: ${activeSensors}개 센서 중 ${unhealthySensors.length}개 응답 없음`
+  );
+
+  if (unhealthySensors.length > 0) {
+    console.warn("❌ 응답하지 않는 센서들:");
+    unhealthySensors.forEach((sensor) => {
+      console.warn(
+        `  - ${sensor.name} (${sensor.id}): ${sensor.lastSeen}초 전 마지막 수신`
+      );
+    });
+
+    // 센서가 없거나 활성 센서의 30% 미만만 동작하면 완전 리셋
+    if (
+      activeSensors === 0 ||
+      (activeSensors > 0 && unhealthySensors.length >= activeSensors * 0.7)
+    ) {
+      console.error(
+        "🚨 대부분의 센서가 응답하지 않음. 전체 시스템 리셋 시작..."
+      );
+      resetAndReloadSensors();
+      return;
+    }
+
+    // 전체 센서의 50% 이상이 응답하지 않으면 재연결만 시도
+    if (unhealthySensors.length >= activeSensors * 0.5) {
+      console.warn("⚠️ 다수의 센서가 응답하지 않음. WebSocket 재연결 시도...");
+      wsClient.disconnect();
+    }
+  } else {
+    console.log("✅ 모든 센서가 정상 응답 중");
+  }
+}
+
+// 센서 목록 주기적 모니터링 시작
+function startSensorListMonitoring() {
+  // 기존 타이머 정리
+  stopSensorListMonitoring();
+
+  // 60초마다 센서 목록 다시 확인
+  sensorListUpdateInterval = setInterval(async () => {
+    console.log("🔄 센서 목록 업데이트 확인 중...");
+
+    try {
+      const response = await fetch(
+        `http://${serverIp}:${serverPort}/api/sensor/mappings`
+      );
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const responseData = await response.json();
+
+      // 응답 구조 확인 및 데이터 추출
+      let newSensorData = [];
+      if (responseData.data && responseData.data.sensors) {
+        newSensorData = responseData.data.sensors;
+      } else if (Array.isArray(responseData.data)) {
+        newSensorData = responseData.data;
+      } else if (Array.isArray(responseData)) {
+        newSensorData = responseData;
+      } else {
+        throw new Error("예상하지 못한 응답 형식입니다.");
+      }
+
+      // 에러 센서 제외
+      const validSensorData = newSensorData.filter((item) => {
+        return (
+          !item.modelName || !item.modelName.toLowerCase().includes("error")
+        );
+      });
+
+      const newSensors = validSensorData.map((item, index) => {
+        const sensor = SensorInfo.fromJson(item);
+        // 사용자 지정 이름 생성 및 할당 (기존 이름 우선 적용)
+        sensor.customName = generateSensorName(
+          sensor.serialNumber,
+          sensors.length + index
+        );
+        return sensor;
+      });
+
+      // 기존 센서와 비교
+      if (hasSensorListChanged(sensors, newSensors)) {
+        console.log(
+          `📊 센서 목록 변경 감지: ${sensors.length} → ${newSensors.length}`
+        );
+
+        // 제거된 센서들 정리
+        cleanupRemovedSensors(sensors, newSensors);
+
+        // 센서 목록 업데이트
+        const oldSensorCount = sensors.length;
+        sensors = newSensors;
+
+        // 새로운 센서들 구독
+        subscribeToAllSensors();
+
+        // 헬스체크 맵 업데이트
+        updateHealthCheckForNewSensors();
+
+        // UI 업데이트
+        updateTotalSensorsCount();
+        renderSensorCards();
+
+        // 연결 상태 메시지 업데이트
+        updateConnectionStatusWithSensorCount();
+
+        console.log(
+          `센서 목록 업데이트 완료: ${oldSensorCount} → ${sensors.length}개`
+        );
+
+        // 센서가 모두 제거된 경우
+        if (sensors.length === 0) {
+          console.warn("⚠️ 모든 센서가 제거되었습니다.");
+          showNoSensorsState();
+        }
+      }
+    } catch (error) {
+      console.warn("센서 목록 업데이트 실패:", error.message);
+    }
+  }, 60000); // 60초마다
+
+  console.log("🔄 센서 목록 모니터링 시작 (60초 간격)");
+}
+
+// 센서 목록 모니터링 중지
+function stopSensorListMonitoring() {
+  if (sensorListUpdateInterval) {
+    clearInterval(sensorListUpdateInterval);
+    sensorListUpdateInterval = null;
+    console.log("센서 목록 모니터링 중지");
+  }
+}
+
+// 센서 목록 변경 확인
+function hasSensorListChanged(oldSensors, newSensors) {
+  if (oldSensors.length !== newSensors.length) {
+    return true;
+  }
+
+  // 각 센서의 ID로 비교
+  const oldSensorIds = new Set(
+    oldSensors.map((s) => `${s.modelName}_${s.portName}`)
+  );
+  const newSensorIds = new Set(
+    newSensors.map((s) => `${s.modelName}_${s.portName}`)
+  );
+
+  // 제거된 센서 확인
+  for (const oldId of oldSensorIds) {
+    if (!newSensorIds.has(oldId)) {
+      return true;
+    }
+  }
+
+  // 추가된 센서 확인
+  for (const newId of newSensorIds) {
+    if (!oldSensorIds.has(newId)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// 새로운 센서 목록에 맞게 헬스체크 업데이트
+function updateHealthCheckForNewSensors() {
+  const currentTime = Date.now();
+  const newHealthCheck = new Map();
+
+  // 새로운 센서들에 대해서만 헬스체크 설정
+  sensors.forEach((sensor) => {
+    const sensorId = `${sensor.modelName}_${sensor.portName}`;
+    // 기존 헬스체크 데이터가 있으면 유지, 없으면 현재 시간으로 설정
+    const lastSeen = sensorHealthCheck.get(sensorId) || currentTime;
+    newHealthCheck.set(sensorId, lastSeen);
+  });
+
+  sensorHealthCheck = newHealthCheck;
+  console.log(`헬스체크 업데이트 완료: ${sensorHealthCheck.size}개 센서`);
+}
+
+// 제거된 센서들 정리
+function cleanupRemovedSensors(oldSensors, newSensors) {
+  const newSensorIds = new Set(
+    newSensors.map((s) => `${s.modelName}_${s.portName}`)
+  );
+
+  oldSensors.forEach((oldSensor) => {
+    const oldSensorId = `${oldSensor.modelName}_${oldSensor.portName}`;
+
+    if (!newSensorIds.has(oldSensorId)) {
+      console.log(`센서 제거됨: ${oldSensorId} (${oldSensor.displayName})`);
+
+      // 구독 해제
+      if (wsClient.isConnected()) {
+        wsClient.unsubscribe(oldSensor.topicPath);
+      }
+
+      // 모든 관련 데이터 완전히 제거
+      sensorGroups.delete(oldSensorId);
+      lelSensors.delete(oldSensorId);
+      sensorGroupAlarms.delete(oldSensorId);
+      sensorHealthCheck.delete(oldSensorId);
+      sensorThresholds.delete(oldSensorId);
+
+      console.log(`센서 ${oldSensorId} 데이터 완전 정리 완료`);
+    }
+  });
+}
+
+// 센서 목록 리셋 및 다시 로딩
+function resetAndReloadSensors() {
+  console.log("=========================");
+  console.log("전체 시스템 리셋 시작");
+  console.log("=========================");
+
+  // 기존 연결 및 타이머 정리
+  wsClient.disconnect();
+  stopSensorHealthCheck();
+  stopSensorListMonitoring();
+  clearTimeout(reconnectTimer);
+
+  // 모든 센서 관련 데이터 초기화 (사용자 지정 이름은 보존)
+  sensors = [];
+  sensorGroups.clear();
+  lelSensors.clear();
+  sensorGroupAlarms.clear();
+  sensorHealthCheck.clear();
+  sensorThresholds.clear();
+  reconnectAttempts = 0;
+
+  // 사용자 지정 이름은 보존 (sensorCustomNames는 초기화하지 않음)
+  console.log(
+    "사용자 지정 센서 이름 보존:",
+    Object.fromEntries(sensorCustomNames)
+  );
+
+  // UI 상태 초기화
+  updateTotalSensorsCount();
+  showLoadingState();
+
+  // 3초 후 센서 목록 다시 로딩
+  setTimeout(() => {
+    console.log("센서 목록 재로딩 시작...");
+    loadSensors();
+  }, 3000);
+}
+
+// 센서가 없을 때 상태 표시
+function showNoSensorsState() {
+  const grid = elements.sensorGrid;
+  grid.innerHTML = `
+    <div class="no-sensors-container">
+      <div class="no-sensors-content">
+        <i class="fas fa-exclamation-triangle" style="color: #e74c3c; font-size: 3rem; margin-bottom: 1rem;"></i>
+        <h3>연결된 센서가 없습니다</h3>
+        <p>센서 연결을 확인하거나 설정을 다시 확인해주세요.</p>
+        <div class="no-sensors-actions">
+          <button class="btn btn-primary" onclick="resetAndReloadSensors()">
+            재연결 시도
+          </button>
+          <button class="btn btn-secondary" onclick="openSettingsModal()">
+            설정 확인
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // 출입 상태를 위험으로 설정
+  updateAccessStatusForNoSensors();
+  updateSystemStatusBannerForNoSensors();
+}
+
+// 센서가 없을 때 출입 상태 업데이트
+function updateAccessStatusForNoSensors() {
+  const existingStatus = document.querySelector(".access-status");
+  if (existingStatus) {
+    existingStatus.remove();
+  }
+
+  const accessStatusEl = document.createElement("div");
+  accessStatusEl.className = "access-status danger";
+  accessStatusEl.innerHTML = `
+    <i class="fas fa-ban"></i>
+    센서 연결 없음 - 출입 불가!
+  `;
+
+  document.body.appendChild(accessStatusEl);
+}
+
+// 센서가 없을 때 시스템 상태 배너 업데이트
+function updateSystemStatusBannerForNoSensors() {
+  const existingBanner = document.querySelector(".system-status-card");
+  if (existingBanner) {
+    existingBanner.remove();
+  }
+
+  const bannerEl = document.createElement("div");
+  bannerEl.className = "system-status-card danger";
+  bannerEl.innerHTML = `
+    <div class="system-status-title danger">
+      <i class="fas fa-exclamation-triangle"></i>
+      <span>시스템 오류</span>
+    </div>
+    <div class="system-status-message">
+      연결된 센서가 없습니다.
+    </div>
+    <div class="system-status-details">
+      가스 모니터링이 불가능한 상태입니다.
+    </div>
+  `;
+
+  const mainContent = document.querySelector(".main-content");
+  if (mainContent) {
+    mainContent.insertBefore(bannerEl, mainContent.firstChild);
+  }
+}
+
+// 수동 재연결 함수 수정
+function manualReconnect() {
+  console.log("수동 재연결 시도");
+
+  // 모든 타이머 정리
+  clearTimeout(reconnectTimer);
+  stopSensorHealthCheck();
+  stopSensorListMonitoring();
+  reconnectAttempts = 0;
+
+  // 기존 연결 종료
+  wsClient.disconnect();
+
+  // 데이터 초기화
+  sensorGroups.clear();
+  lelSensors.clear();
+  sensorGroupAlarms.clear();
+  sensorHealthCheck.clear();
+
+  // 센서 정보부터 다시 로딩
+  loadSensors();
+}
+
+// 센서 카드 렌더링 수정
+function renderSensorCards() {
+  if (sensors.length === 0) {
+    showNoSensorsState();
+    return;
+  }
+
+  const grid = elements.sensorGrid;
+  grid.innerHTML = "";
+
+  // 센서를 이름순으로 정렬
+  const sortedSensors = [...sensors].sort((a, b) => {
+    const nameA = a.displayName.toLowerCase();
+    const nameB = b.displayName.toLowerCase();
+    return nameA.localeCompare(nameB);
+  });
+
+  sortedSensors.forEach((sensor, index) => {
+    const sensorId = `${sensor.modelName}_${sensor.portName}`;
+    let cardElement;
+
+    if (sensor.gasType === "LEL") {
+      cardElement = createLelSensorCard(sensorId, sensor);
+    } else {
+      cardElement = createSensorGroupCard(sensorId, sensor);
+    }
+
+    grid.appendChild(cardElement);
+  });
+
+  // 출입 상태 및 시스템 상태 업데이트
+  updateAccessStatus();
+  updateSystemStatusBanner();
+
+  // 연결 상태 업데이트
+  updateConnectionStatusWithSensorCount();
+}
+
+// 페이지 종료 시 정리
+window.addEventListener("beforeunload", function () {
+  stopSensorHealthCheck();
+  stopSensorListMonitoring();
+  clearTimeout(reconnectTimer);
+  wsClient.disconnect();
+});
 
 // 연결 상태 업데이트
 function updateConnectionStatus(status, message) {
@@ -152,6 +730,13 @@ function updateConnectionStatus(status, message) {
     // statusIcon.className = "fas fa-circle status-icon";
   } else {
     // statusIcon.className = "fas fa-circle status-icon";
+  }
+}
+
+// 연결된 센서 개수로 상태 메시지 업데이트
+function updateConnectionStatusWithSensorCount() {
+  if (wsClient && wsClient.isConnected()) {
+    updateConnectionStatus("connected", `${sensors.length}개 센서 연결됨`);
   }
 }
 
@@ -213,7 +798,12 @@ async function loadSensors() {
       });
 
       // 센서 데이터 파싱
-      sensors = validSensorData.map((item) => SensorInfo.fromJson(item));
+      sensors = validSensorData.map((item, index) => {
+        const sensor = SensorInfo.fromJson(item);
+        // 사용자 지정 이름 생성 및 할당
+        sensor.customName = generateSensorName(sensor.serialNumber, index);
+        return sensor;
+      });
       console.log(`센서 ${sensors.length}개 로드 완료`);
 
       // UI 업데이트
@@ -271,7 +861,6 @@ function handleSensorMessage(destination, body) {
   }
 }
 
-// 센서 데이터 업데이트
 // 센서 데이터 업데이트
 function updateSensor(sensorIndex, body) {
   if (!body || body.trim() === "" || sensorIndex >= sensors.length) return;
@@ -372,11 +961,28 @@ function updateTotalSensorsCount() {
 }
 
 // 센서 카드 렌더링
+// 센서 카드 렌더링 수정
 function renderSensorCards() {
+  if (sensors.length === 0) {
+    showNoSensorsState();
+    return;
+  }
+
   const grid = elements.sensorGrid;
   grid.innerHTML = "";
 
-  sensors.forEach((sensor, index) => {
+  // 센서를 이름순으로 정렬
+  const sortedSensors = [...sensors].sort((a, b) => {
+    const nameA = a.displayName.toLowerCase();
+    const nameB = b.displayName.toLowerCase();
+    return nameA.localeCompare(nameB);
+  });
+
+  // 최대 4개의 센서만 표시 (2행 2열)
+  const maxSensors = 4;
+  const sensorsToShow = sortedSensors.slice(0, maxSensors);
+
+  sensorsToShow.forEach((sensor, index) => {
     const sensorId = `${sensor.modelName}_${sensor.portName}`;
     let cardElement;
 
@@ -392,6 +998,9 @@ function renderSensorCards() {
   // 출입 상태 및 시스템 상태 업데이트
   updateAccessStatus();
   updateSystemStatusBanner();
+
+  // 연결 상태 업데이트
+  updateConnectionStatusWithSensorCount();
 }
 
 // LEL 센서 카드 생성
@@ -428,15 +1037,22 @@ function createLelSensorCard(sensorId, sensor) {
   }
 
   const card = document.createElement("div");
-  card.className = `sensor-card lel-sensor status-${status}`;
+  card.className = `sensor-card status-${status}`;
   card.innerHTML = `
-        <div class="sensor-header">
-            <h3 class="sensor-title">
+        <div class="sensor-header hover-reveal">
+            <h3 class="sensor-title" ondblclick="editSensorName('${
+              sensor.serialNumber
+            }', this)">
                  ${sensor.displayName}
             </h3>
             <div class="sensor-actions">
-                <button class="btn btn-secondary" onclick="openThresholdModal('${sensorId}', 'lel')">
-                    임계치 설정
+                <button class="btn btn-secret" onclick="editSensorName('${
+                  sensor.serialNumber
+                }')">
+                     이름 변경
+                </button>
+                <button class="btn btn-secret" onclick="openThresholdModal('${sensorId}', 'lel')">
+                    <i class="fas fa-cog"></i> 임계치 설정
                 </button>
             </div>
         </div>
@@ -529,13 +1145,20 @@ function createSensorGroupCard(sensorId, sensor) {
   const card = document.createElement("div");
   card.className = `sensor-card status-${groupStatus}`;
   card.innerHTML = `
-        <div class="sensor-header">
-            <h3 class="sensor-title">
+        <div class="sensor-header hover-reveal">
+            <h3 class="sensor-title" ondblclick="editSensorName('${
+              sensor.serialNumber
+            }', this)">
                 ${sensor.displayName}
             </h3>
             <div class="sensor-actions">
-                <button class="btn btn-secondary" onclick="openThresholdModal('${sensorId}', 'composite')">
-                  임계치 설정
+                <button class="btn btn-secret" onclick="editSensorName('${
+                  sensor.serialNumber
+                }')">
+                    이름 변경
+                </button>
+                <button class="btn btn-secret" onclick="openThresholdModal('${sensorId}', 'composite')">
+                    임계치 설정
                 </button>
             </div>
         </div>
@@ -644,14 +1267,26 @@ function updateSensorList() {
             </div>
         `;
   } else {
-    elements.sensorList.innerHTML = sensors
+    // 센서를 이름순으로 정렬
+    const sortedSensors = [...sensors].sort((a, b) => {
+      const nameA = a.displayName.toLowerCase();
+      const nameB = b.displayName.toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+
+    elements.sensorList.innerHTML = sortedSensors
       .map(
         (sensor) => `
             <div class="sensor-item">
                 <div class="sensor-info">
                     <div class="sensor-name">${sensor.displayName}</div>
-                    <div class="sensor-details">Serial: ${sensor.serialNumber}</div>
+                    <div class="sensor-details">Serial: ${sensor.serialNumber} | Model: ${sensor.modelName} (${sensor.portName})</div>
                     <div class="sensor-topic">${sensor.topicPath}</div>
+                </div>
+                <div class="sensor-actions">
+                    <button class="btn btn-secondary btn-sm" onclick="editSensorName('${sensor.serialNumber}')">
+                        이름 변경
+                    </button>
                 </div>
             </div>
         `
@@ -840,7 +1475,7 @@ function checkOverallSafetyStatus() {
     );
     if (!sensor) continue;
 
-    ["CO", "O2", "H2S", "CO2"].forEach((gasType) => {
+    ["CO" + "일산화탄소", "O2", "H2S", "CO2"].forEach((gasType) => {
       const status = calculateSensorGasStatus(
         sensorId,
         gasType,
@@ -925,20 +1560,20 @@ function updateSystemStatusBanner() {
     bannerEl.classList.add("danger");
     bannerEl.innerHTML = `
       <div class="system-status-title danger">
-        <span>위험 상태</span>
+        <span>출입 불가</span>
       </div>
       <div class="system-status-message">
-        다음 센서에서 위험 수치가 감지되었습니다:
+        센서 임계치를 초과했습니다! 즉시 조치가 필요합니다.
       </div>
       <div class="system-status-details">
-        ${safetyStatus.problemSensors.join(", ")}
+        감지 코드 : ${safetyStatus.problemSensors.join(", ")}
       </div>
     `;
   } else if (safetyStatus.hasWarning) {
     bannerEl.classList.add("warning");
     bannerEl.innerHTML = `
-      <div class="system-status-title" style="color: #f39c12;">
-        <span>주의 상태</span>
+      <div class="system-status-title" style="color: #ffffff;">
+        <span>주의 필요</span>
       </div>
       <div class="system-status-message">
         일부 센서에서 경고 수치가 감지되었습니다. 주의하세요.
@@ -948,7 +1583,7 @@ function updateSystemStatusBanner() {
     bannerEl.classList.add("safe");
     bannerEl.innerHTML = `
       <div class="system-status-title safe">
-        <span>정상 상태</span>
+        <span>출입 가능</span>
       </div>
       <div class="system-status-message">
         모든 센서가 정상 범위 내에 있습니다.
@@ -968,4 +1603,28 @@ function logMessage(message, name = "GasMonitoring") {
   const timestamp = new Date().toLocaleTimeString();
   const logLine = `[${timestamp}] [${name}] ${message}`;
   console.log(logLine);
+}
+
+// 센서 이름 편집 함수
+function editSensorName(serialNumber, titleElement = null) {
+  const sensor = sensors.find((s) => s.serialNumber === serialNumber);
+  if (!sensor) {
+    console.error("센서를 찾을 수 없습니다:", serialNumber);
+    return;
+  }
+
+  const currentName = sensor.displayName;
+  const newName = prompt(`센서 이름을 입력하세요:`, currentName);
+
+  if (newName && newName.trim() !== "" && newName !== currentName) {
+    const trimmedName = newName.trim();
+    updateSensorCustomName(serialNumber, trimmedName);
+
+    // 즉시 UI 업데이트 (전체 렌더링 대신 해당 요소만)
+    if (titleElement) {
+      titleElement.textContent = trimmedName;
+    }
+
+    console.log(`센서 이름 변경: ${currentName} → ${trimmedName}`);
+  }
 }

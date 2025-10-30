@@ -88,6 +88,7 @@ class SensorInfo {
     this.serialNumber = serialNumber;
     this.data = data;
     this.lastUpdateTime = lastUpdateTime;
+    this.customName = null; // 사용자 지정 이름
   }
 
   static fromJson(json) {
@@ -103,6 +104,10 @@ class SensorInfo {
   }
 
   get displayName() {
+    // 사용자 지정 이름이 있으면 우선 사용
+    if (this.customName) {
+      return this.customName;
+    }
     return `${this.modelName} (${this.portName})`;
   }
 

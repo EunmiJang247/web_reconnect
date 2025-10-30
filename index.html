@@ -12,7 +12,6 @@
       <!-- 헤더 -->
       <header class="header">
         <div class="header-content">
-          <h1>가스 모니터링 시스템</h1>
           <div class="header-controls">
             <div class="connection-status" id="connectionStatus">
               <span class="status-text">센서 정보 로딩중...</span>
@@ -32,9 +31,11 @@
         </div>
 
         <!-- 센서 그리드 -->
-        <div class="sensor-grid" id="sensorGrid" style="display: none">
+         
+          <div class="sensor-grid" id="sensorGrid" style="display: none">
           <!-- 센서 카드들이 동적으로 생성됩니다 -->
-        </div>
+          </div>
+       
 
         <!-- 에러 메시지 -->
         <div class="error-container" id="errorContainer" style="display: none">
@@ -48,11 +49,11 @@
         </div>
       </main>
 
-      <!-- 마지막 업데이트 시간 -->
+      <!-- 마지막 업데이트 시간 & 재연결 -->
       <footer class="footer">
         <div class="footer-content">
           <span>마지막 업데이트: <span id="lastUpdateTime">--</span></span>
-          <span>총 센서 수: <span id="totalSensors">0</span>개</span>
+          <span>설치 센서: <span id="totalSensors">0</span>개</span>
         </div>
       </footer>
     </div>
