@@ -106,7 +106,20 @@
               class="form-group form-control connection-info"
               style="display: flex; align-items: center; gap: 10px"
             >
-              <div><button>켜기</button> <button>끄기</button></div>
+              <div>
+                <button
+                  class="btn btn-primary"
+                  onclick="callAlertAPI(true, true)"
+                >
+                  켜기
+                </button>
+                <button
+                  class="btn btn-secondary"
+                  onclick="callAlertAPI(false, true)"
+                >
+                  끄기
+                </button>
+              </div>
               <div
                 class="form-group"
                 style="
@@ -121,11 +134,7 @@
                   <input
                     type="checkbox"
                     id="beaconToggle"
-                    onchange="(function(checked){
-                      sendRelayCommand(document.getElementById('beaconChannel').value, checked ? 'on' : 'off');
-                      document.getElementById('beaconStatus').textContent = checked ? '연결됨' : '연결 안됨';
-                      document.getElementById('beaconToggleLabel').textContent = checked ? 'ON' : 'OFF';
-                    })(this.checked)"
+                    onchange="toggleAlarmMaster(this.checked)"
                   />
                   <span class="slider"></span> </label
                 >ON

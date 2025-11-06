@@ -11,6 +11,9 @@ let isLoadingSensors = false;
 let currentThresholdSensorId = null;
 let currentThresholdSensorType = null;
 let lampOn = false;
+let alertPorts = []; // 경광등 포트 목록
+let isAlarmMasterEnabled = true; // 알람 마스터 스위치 상태 (기본값: ON)
+let isManuallyDisabled = false; // 수동으로 알람을 끈 상태인지 확인
 
 // 전역 변수에 추가
 let reconnectAttempts = 0;
@@ -46,6 +49,8 @@ document.addEventListener("DOMContentLoaded", function () {
   setupEventListeners();
   setupWebSocketCallbacks();
   loadSensorCustomNames(); // 저장된 센서 이름 로드
+  loadAlarmMasterSetting(); // 알람 마스터 설정 로드
+  loadAlertList(); // 경광등 리스트 로드
   loadSensors();
 });
 
@@ -1013,6 +1018,7 @@ function createLelSensorCard(sensorId, sensor) {
     gasId: "--",
   };
   const alarmMessage = sensorGroupAlarms.get(sensorId) || "";
+  const alarmLevel = getAlarmMessageLevel(alarmMessage);
 
   // LEL 값으로 상태 계산
   const lelValue = lelData.lel || "--";
@@ -1093,7 +1099,7 @@ function createLelSensorCard(sensorId, sensor) {
         ${
           alarmMessage
             ? `
-            <div class="alarm-message">
+            <div class="alarm-message alarm-${alarmLevel}">
                 ${alarmMessage}
             </div>
         `
@@ -1113,6 +1119,7 @@ function createSensorGroupCard(sensorId, sensor) {
     CO2: "--",
   };
   const alarmMessage = sensorGroupAlarms.get(sensorId) || "";
+  const alarmLevel = getAlarmMessageLevel(alarmMessage);
 
   // 전체 센서 상태 계산
   let hasError = false;
@@ -1178,7 +1185,7 @@ function createSensorGroupCard(sensorId, sensor) {
         ${
           alarmMessage
             ? `
-            <div class="alarm-message">
+            <div class="alarm-message alarm-${alarmLevel}">
                 ${alarmMessage}
             </div>
         `
@@ -1236,6 +1243,36 @@ function getSensorThreshold(sensorId, gasType) {
 function calculateSensorGasStatus(sensorId, gasType, gasValue) {
   const threshold = getSensorThreshold(sensorId, gasType);
   return calculateGasStatus(gasType, gasValue, threshold);
+}
+
+// 알람 메시지 레벨 결정 함수
+function getAlarmMessageLevel(alarmMessage) {
+  if (!alarmMessage || alarmMessage.trim() === "") {
+    return "normal";
+  }
+
+  const upperAlarmMessage = alarmMessage.toUpperCase();
+
+  if (
+    upperAlarmMessage.includes("DANGER") ||
+    upperAlarmMessage.includes("CRITICAL") ||
+    upperAlarmMessage.includes("HIGH") ||
+    upperAlarmMessage.includes("위험") ||
+    upperAlarmMessage.includes("ERROR")
+  ) {
+    return "danger";
+  } else if (
+    upperAlarmMessage.includes("WARNING") ||
+    upperAlarmMessage.includes("WARN") ||
+    upperAlarmMessage.includes("LOW") ||
+    upperAlarmMessage.includes("경고") ||
+    upperAlarmMessage.includes("주의")
+  ) {
+    return "warning";
+  } else {
+    // 레벨을 알 수 없는 경우 기본적으로 경고로 처리
+    return "warning";
+  }
 }
 
 // 설정 관련 함수들
@@ -1476,7 +1513,7 @@ function checkOverallSafetyStatus() {
     );
     if (!sensor) continue;
 
-    ["CO" + "일산화탄소", "O2", "H2S", "CO2"].forEach((gasType) => {
+    ["CO", "O2", "H2S", "CO2"].forEach((gasType) => {
       const status = calculateSensorGasStatus(
         sensorId,
         gasType,
@@ -1514,11 +1551,36 @@ function checkOverallSafetyStatus() {
         (s) => `${s.modelName}_${s.portName}` === sensorId
       );
       if (sensor) {
-        hasDanger = true;
-        problemSensors.push(`${sensor.displayName} 알람`);
+        // 알람 메시지의 레벨에 따라 구분 처리
+        const upperAlarmMessage = alarmMessage.toUpperCase();
+
+        if (
+          upperAlarmMessage.includes("DANGER") ||
+          upperAlarmMessage.includes("CRITICAL") ||
+          upperAlarmMessage.includes("HIGH")
+        ) {
+          hasDanger = true;
+          problemSensors.push(`${sensor.displayName} 알람`);
+        } else if (
+          upperAlarmMessage.includes("WARNING") ||
+          upperAlarmMessage.includes("WARN") ||
+          upperAlarmMessage.includes("LOW")
+        ) {
+          hasWarning = true;
+        } else {
+          // 레벨을 알 수 없는 경우 기본적으로 위험으로 처리
+          hasDanger = true;
+          problemSensors.push(`${sensor.displayName} 알람`);
+        }
       }
     }
   }
+
+  console.log("전체 안전 상태 확인:", {
+    isDangerous: hasDanger,
+    hasWarning: hasWarning,
+    problemSensors: problemSensors,
+  });
 
   return {
     isDangerous: hasDanger,
@@ -1546,31 +1608,91 @@ function updateAccessStatus() {
 
 const handleDangerousState = () => {
   if (lampOn) return;
+
+  // 알람 마스터 스위치가 OFF인 경우 알람을 울리지 않음
+  if (!isAlarmMasterEnabled) {
+    console.log(
+      "⚠️ 전체 알람 시스템이 OFF 상태입니다. 설정에서 알람 스위치를 켜주세요."
+    );
+    return;
+  }
+
+  // 수동으로 비활성화된 경우 알람을 울리지 않음
+  if (isManuallyDisabled) {
+    console.log(
+      "수동으로 알람이 비활성화된 상태입니다. 마스터 스위치를 다시 조작하거나 켜기 버튼을 눌러주세요."
+    );
+    return;
+  }
+
   console.warn("위험 상태 감지됨! 즉시 조치가 필요합니다.");
   lampOn = true;
 
   // 알람 API 호출 (켜기)
   callAlertAPI(true);
-};
-
-// 안전 상태로 복귀할 때 호출할 함수 추가
+}; // 안전 상태로 복귀할 때 호출할 함수 추가
 const handleSafeState = () => {
   if (!lampOn) return;
-  console.log("안전 상태로 복귀됨. 알람을 끕니다.");
+  console.log("안전 상태로 복귀됨. 알람을 자동으로 끕니다.");
   lampOn = false;
+  // 자동으로 끄는 경우에는 isManuallyDisabled를 변경하지 않음
 
   // 알람 API 호출 (끄기)
   callAlertAPI(false);
 };
 
+// 경광등 리스트 가져오기
+async function loadAlertList() {
+  try {
+    const response = await fetch(`http://${serverIp}:${serverPort}/api/alert`);
+
+    if (response.ok) {
+      const result = await response.json();
+      if (result.code === 200 && result.data && result.data.alerts) {
+        alertPorts = result.data.alerts.map((alert) => alert.portName);
+        console.log("🚨 경광등 포트 목록:", alertPorts);
+        return alertPorts;
+      } else {
+        console.warn("경광등 리스트 응답 형식이 예상과 다름:", result);
+        return [];
+      }
+    } else {
+      console.error(
+        "경광등 리스트 가져오기 실패:",
+        response.status,
+        response.statusText
+      );
+      return [];
+    }
+  } catch (error) {
+    console.error("경광등 리스트 가져오기 중 오류 발생:", error);
+    return [];
+  }
+}
+
 // 알람 API 호출 함수 수정
-async function callAlertAPI(turnOn) {
+async function callAlertAPI(turnOn, isManual = false) {
+  // 먼저 경광등 리스트를 가져와서 포트 정보 확인
+  if (alertPorts.length === 0) {
+    console.log("경광등 포트 정보를 가져오는 중...");
+    await loadAlertList();
+  }
+
+  if (alertPorts.length === 0) {
+    console.error("사용 가능한 경광등 포트가 없습니다.");
+    alert("경광등을 찾을 수 없습니다. 설정을 확인해주세요.");
+    return;
+  }
+
   const endpoint = turnOn ? "on" : "off";
   const action = turnOn ? "켜기" : "끄기";
+  const portNames = alertPorts.join(", ");
 
   try {
     const response = await fetch(
-      `http://${serverIp}:${serverPort}/api/alert/${endpoint}`,
+      `http://${serverIp}:${serverPort}/api/alert/${endpoint}?portNames=${encodeURIComponent(
+        portNames
+      )}`,
       {
         method: "POST",
         headers: {
@@ -1580,7 +1702,42 @@ async function callAlertAPI(turnOn) {
     );
 
     if (response.ok) {
-      console.log(`🚨 알람 ${action} API 호출 성공`);
+      console.log(`🚨 알람 ${action} API 호출 성공 (포트: ${portNames})`);
+
+      // 수동 조작인 경우 상태 업데이트
+      if (isManual) {
+        if (turnOn) {
+          lampOn = true;
+          isManuallyDisabled = false;
+          // 켤 때는 마스터 스위치도 자동으로 ON
+          isAlarmMasterEnabled = true;
+          const toggleElement = document.getElementById("beaconToggle");
+          if (toggleElement) {
+            toggleElement.checked = true;
+          }
+          localStorage.setItem("alarmMasterEnabled", "true");
+          console.log(
+            "✅ 수동으로 알람을 켰습니다. 전체 알람 시스템이 활성화되었습니다."
+          );
+        } else {
+          lampOn = false;
+          isManuallyDisabled = true;
+          // 끌 때는 마스터 스위치도 자동으로 OFF
+          isAlarmMasterEnabled = false;
+          const toggleElement = document.getElementById("beaconToggle");
+          if (toggleElement) {
+            toggleElement.checked = false;
+          }
+          localStorage.setItem("alarmMasterEnabled", "false");
+          console.log(
+            "⛔ 수동으로 알람을 껐습니다. 전체 알람 시스템이 비활성화되었습니다."
+          );
+          // Alert 메시지 표시
+          alert(
+            "🚨 알람이 수동으로 꺼졌습니다!\n\n조치를 취한 후 설정에서 알람 스위치를 다시 켜주세요."
+          );
+        }
+      }
     } else {
       console.error(
         `알람 ${action} API 호출 실패:`,
@@ -1679,5 +1836,56 @@ function editSensorName(serialNumber, titleElement = null) {
     }
 
     console.log(`센서 이름 변경: ${currentName} → ${trimmedName}`);
+  }
+}
+
+// 알람 마스터 스위치 토글 함수
+function toggleAlarmMaster(enabled) {
+  isAlarmMasterEnabled = enabled;
+  console.log(`🔔 알람 마스터 스위치: ${enabled ? "ON" : "OFF"}`);
+
+  // 설정값 로컬 저장소에 저장
+  localStorage.setItem("alarmMasterEnabled", enabled.toString());
+
+  // 스위치 조작 시 수동 비활성화 상태 해제
+  if (enabled) {
+    isManuallyDisabled = false;
+    console.log(
+      "✅ 알람 시스템이 활성화되었습니다. 수동 비활성화 상태가 해제되고, 위험 감지 시 자동으로 알람이 울립니다."
+    );
+  } else {
+    // 스위치가 OFF로 변경되고 현재 알람이 켜져있다면 즉시 끄기
+    if (lampOn) {
+      console.log(
+        "알람 마스터 스위치가 OFF로 변경되어 현재 켜진 알람을 끕니다."
+      );
+      callAlertAPI(false);
+      lampOn = false;
+    }
+    console.log(
+      "❌ 알람 시스템이 비활성화되었습니다. 위험 감지되어도 알람이 울리지 않습니다."
+    );
+  }
+}
+
+// 알람 마스터 스위치 설정 로드
+function loadAlarmMasterSetting() {
+  try {
+    const saved = localStorage.getItem("alarmMasterEnabled");
+    if (saved !== null) {
+      isAlarmMasterEnabled = saved === "true";
+      // HTML 스위치 상태도 동기화
+      const toggleElement = document.getElementById("beaconToggle");
+      if (toggleElement) {
+        toggleElement.checked = isAlarmMasterEnabled;
+      }
+      console.log(
+        `💾 저장된 알람 마스터 설정 로드: ${
+          isAlarmMasterEnabled ? "ON" : "OFF"
+        }`
+      );
+    }
+  } catch (error) {
+    console.error("알람 마스터 설정 로드 중 오류:", error);
   }
 }
