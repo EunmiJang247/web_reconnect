@@ -10,6 +10,7 @@ let serverPort = "8081";
 let isLoadingSensors = false;
 let currentThresholdSensorId = null;
 let currentThresholdSensorType = null;
+let lampOn = false;
 
 // 전역 변수에 추가
 let reconnectAttempts = 0;
@@ -1543,6 +1544,55 @@ function updateAccessStatus() {
   document.body.appendChild(accessStatusEl);
 }
 
+const handleDangerousState = () => {
+  if (lampOn) return;
+  console.warn("위험 상태 감지됨! 즉시 조치가 필요합니다.");
+  lampOn = true;
+
+  // 알람 API 호출 (켜기)
+  callAlertAPI(true);
+};
+
+// 안전 상태로 복귀할 때 호출할 함수 추가
+const handleSafeState = () => {
+  if (!lampOn) return;
+  console.log("안전 상태로 복귀됨. 알람을 끕니다.");
+  lampOn = false;
+
+  // 알람 API 호출 (끄기)
+  callAlertAPI(false);
+};
+
+// 알람 API 호출 함수 수정
+async function callAlertAPI(turnOn) {
+  const endpoint = turnOn ? "on" : "off";
+  const action = turnOn ? "켜기" : "끄기";
+
+  try {
+    const response = await fetch(
+      `http://${serverIp}:${serverPort}/api/alert/${endpoint}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (response.ok) {
+      console.log(`🚨 알람 ${action} API 호출 성공`);
+    } else {
+      console.error(
+        `알람 ${action} API 호출 실패:`,
+        response.status,
+        response.statusText
+      );
+    }
+  } catch (error) {
+    console.error(`알람 ${action} API 호출 중 오류 발생:`, error);
+  }
+}
+
 function updateSystemStatusBanner() {
   const safetyStatus = checkOverallSafetyStatus();
 
@@ -1557,6 +1607,7 @@ function updateSystemStatusBanner() {
   bannerEl.className = "system-status-card";
 
   if (safetyStatus.isDangerous) {
+    handleDangerousState();
     bannerEl.classList.add("danger");
     bannerEl.innerHTML = `
       <div class="system-status-title danger">
@@ -1580,6 +1631,8 @@ function updateSystemStatusBanner() {
       </div>
     `;
   } else {
+    // 안전 상태일 때 알람 끄기
+    handleSafeState();
     bannerEl.classList.add("safe");
     bannerEl.innerHTML = `
       <div class="system-status-title safe">

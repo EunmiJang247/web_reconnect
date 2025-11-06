@@ -31,11 +31,10 @@
         </div>
 
         <!-- 센서 그리드 -->
-         
-          <div class="sensor-grid" id="sensorGrid" style="display: none">
+
+        <div class="sensor-grid" id="sensorGrid" style="display: none">
           <!-- 센서 카드들이 동적으로 생성됩니다 -->
-          </div>
-       
+        </div>
 
         <!-- 에러 메시지 -->
         <div class="error-container" id="errorContainer" style="display: none">
@@ -97,6 +96,40 @@
               <p>
                 WebSocket: <span id="wsUrl">ws://localhost:8081/ws/sensor</span>
               </p>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>회전경광등</h3>
+
+            <div
+              class="form-group form-control connection-info"
+              style="display: flex; align-items: center; gap: 10px"
+            >
+              <div><button>켜기</button> <button>끄기</button></div>
+              <div
+                class="form-group"
+                style="
+                  display: flex;
+                  justify-content: flex-start;
+                  align-items: center;
+                  gap: 10px;
+                  margin-top: 15px;
+                "
+              >
+                OFF<label class="switch" title="회전경광등 켜기/끄기">
+                  <input
+                    type="checkbox"
+                    id="beaconToggle"
+                    onchange="(function(checked){
+                      sendRelayCommand(document.getElementById('beaconChannel').value, checked ? 'on' : 'off');
+                      document.getElementById('beaconStatus').textContent = checked ? '연결됨' : '연결 안됨';
+                      document.getElementById('beaconToggleLabel').textContent = checked ? 'ON' : 'OFF';
+                    })(this.checked)"
+                  />
+                  <span class="slider"></span> </label
+                >ON
+              </div>
             </div>
           </div>
 

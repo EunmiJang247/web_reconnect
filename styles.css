@@ -203,17 +203,18 @@ body {
   background: #a50033;
   color: white;
   opacity: 0;
-  transform: translateY(6px);
-  pointer-events: none;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;  
 }
 
 /* 부모 요소에 .hover-reveal 클래스를 추가하면 hover 시 버튼이 보입니다.
    또한 버튼 자체에 커서를 올렸을 때는 계속 보이도록 처리합니다. */
 .hover-reveal:hover .btn-secret,
-.btn-secret:hover {
-  opacity: 1;
-  transform: translateY(0);
+.hover-reveal:focus-within .btn-secret,
+.hover-reveal.active .btn-secret,
+.btn-secret:hover,
+.btn-secret:focus,
+.btn-secret:active {
+  opacity: 1;  
   pointer-events: auto;
 }
 /* 메인 컨텐츠 */
@@ -290,7 +291,7 @@ body {
 /* 센서 카드 */
 .sensor-card {
   width: 100%;
-  height: 500px;
+  height: auto;
   background: rgba(255, 255, 255, 0.95);
   border-radius: 12px;
   padding: 1.5rem;
@@ -300,27 +301,6 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-}
-
-.sensor-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
-}
-
-.sensor-card.status-danger {
-  border-left: 4px solid #e74c3c;
-}
-
-.sensor-card.status-warning {
-  border-left: 4px solid #f39c12;
-}
-
-.sensor-card.status-normal {
-  border-left: 4px solid #27ae60;
-}
-
-.sensor-card.status-error {
-  border-left: 4px solid #95a5a6;
 }
 
 .sensor-header {
@@ -348,6 +328,8 @@ body {
 }
 
 .sensor-status {
+  width: fit-content;
+  height: fit-content;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
@@ -386,15 +368,14 @@ body {
 .gas-grid {
   display: flex;
   flex-wrap: wrap;
-  width: 100%;
+  height: 100%;
   gap: 1rem;
-  margin-bottom: 1rem;
   flex: 1;
 }
 
 .gas-card {
-  flex: 1;
-  min-width: calc(50% - 0.5rem);
+  flex: 1 1 auto;
+  min-width: calc(21% - 0.5rem);
   background: #f8f9fa;
   border-radius: 8px;
   padding: 1rem;
@@ -427,9 +408,9 @@ body {
 
 .gas-value {
   font-size: 1.5rem;
-  font-weight: 700;
+  font-weight: 900;
   font-family: "Roboto", "Noto Sans KR", sans-serif;
-  margin-bottom: 0.3rem;
+  margin-bottom: 1rem;
 }
 
 .gas-value.status-danger {
@@ -466,8 +447,7 @@ body {
 
 .lel-main-value {
   text-align: center;
-  margin-bottom: 1rem;
-  flex: 1;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -771,6 +751,45 @@ body {
   font-size: 0.9rem;
 }
 
+/* 스위치 토글 스타일 */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 26px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+   height: 0;
+}
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: #ccc;
+  transition: 0.2s;
+  border-radius: 26px;
+}
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 22px;
+  width: 22px;
+  left: 2px;
+  bottom: 2px;
+  background: #fff;
+  transition: 0.2s;
+  border-radius: 50%;
+}
+.switch input:checked + .slider {
+  background: #4caf50;
+}
+.switch input:checked + .slider:before {
+  transform: translateX(24px);
+}
+
 /* 푸터 */
 .footer {
   background: rgba(255, 255, 255, 0.9);
@@ -989,6 +1008,60 @@ body {
   font-weight: 900;
   color: #ffffff;
 }
+
+.form-select {
+  display: block;
+  width: 100%;
+  padding: 0.375rem 2.25rem 0.375rem 0.75rem; /* top/bottom: input-padding-y, right: indicator-padding */
+  font-family: var(--bs-body-font-family, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif);
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #212529;
+  background-color: #fff;
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 16px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 0.375rem;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.075);
+  transition: border-color .15s ease-in-out, box-shadow .15s ease-in-out;
+}
+
+/* focus 상태 */
+.form-select:focus {
+  border-color: #86b7fe;
+  outline: 0;
+  box-shadow: 0 0 0 0.25rem rgba(13,110,253,.25);
+}
+
+/* 비활성화 상태 */
+.form-select:disabled {
+  color: #6c757d;
+  background-color: #e9ecef;
+  border-color: #ced4da;
+}
+
+/* 크기 변형 - small */
+.form-select-sm {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+  padding-left: 0.5rem;
+  font-size: 0.875rem;
+  border-radius: 0.25rem;
+}
+
+/* 크기 변형 - large */
+.form-select-lg {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  padding-left: 1rem;
+  font-size: 1.25rem;
+  border-radius: 0.5rem;
+}
+
+
+
 
 /* 애니메이션 추가 */
 @keyframes pulse-safe {
