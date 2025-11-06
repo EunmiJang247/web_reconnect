@@ -102,42 +102,33 @@
           <div class="settings-section">
             <h3>회전경광등</h3>
 
-            <div
-              class="form-group form-control connection-info"
-              style="display: flex; align-items: center; gap: 10px"
-            >
+            <div class="form-group form-control connection-info">
+              <p>회전경광등 제어</p>
               <div>
-                <button
-                  class="btn btn-primary"
-                  onclick="callAlertAPI(true, true)"
-                >
-                  켜기
+                <button class="btn" onclick="callAlertAPI(true, true)">
+                  <img src="alram-on.png" style="width: 20px" alt="켜기" /> 켜기
                 </button>
-                <button
-                  class="btn btn-secondary"
-                  onclick="callAlertAPI(false, true)"
-                >
+                <button class="btn" onclick="callAlertAPI(false, true)">
+                  <img src="alram-off.png" style="width: 20px" alt="끄기" />
                   끄기
                 </button>
               </div>
-              <div
-                class="form-group"
-                style="
-                  display: flex;
-                  justify-content: flex-start;
-                  align-items: center;
-                  gap: 10px;
-                  margin-top: 15px;
-                "
-              >
-                OFF<label class="switch" title="회전경광등 켜기/끄기">
-                  <input
-                    type="checkbox"
-                    id="beaconToggle"
-                    onchange="toggleAlarmMaster(this.checked)"
-                  />
-                  <span class="slider"></span> </label
-                >ON
+
+              <div style="margin-top: 20px">
+                <p>알림모드 제어</p>
+                <div class="form-group" style="display: flex; gap: 10px">
+                  알람 끔(OFF)<label
+                    class="switch"
+                    title="회전경광등 켜기/끄기"
+                  >
+                    <input
+                      type="checkbox"
+                      id="beaconToggle"
+                      onchange="toggleAlarmMaster(this.checked)"
+                    />
+                    <span class="slider"></span> </label
+                  >위험시 알람(ON)
+                </div>
               </div>
             </div>
           </div>
