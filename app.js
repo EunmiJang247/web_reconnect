@@ -45,10 +45,10 @@ const elements = {
 
 // 초기화
 document.addEventListener("DOMContentLoaded", function () {
-  initializeElements();
-  setupEventListeners();
-  setupWebSocketCallbacks();
-  loadSensorCustomNames(); // 저장된 센서 이름 로드
+  loadSensorCustomNames(); // 로컬스토리지에 저장된 센서 이름 로드
+  initializeElements(); // DOM 요소 초기화
+  setupEventListeners(); // 이벤트 리스너 설정
+  setupWebSocketCallbacks(); // WebSocket 이벤트 콜백 설정(연결/끊김/에러/메시지)
   loadAlarmMasterSetting(); // 알람 마스터 설정 로드
   loadAlertList(); // 경광등 리스트 로드
   loadSensors();
@@ -66,41 +66,6 @@ function loadSensorCustomNames() {
   } catch (error) {
     console.error("센서 이름 로드 실패:", error);
     sensorCustomNames = new Map();
-  }
-}
-
-function saveSensorCustomNames() {
-  try {
-    const namesObj = Object.fromEntries(sensorCustomNames);
-    localStorage.setItem("sensorCustomNames", JSON.stringify(namesObj));
-    console.log("센서 이름 저장 완료:", namesObj);
-  } catch (error) {
-    console.error("센서 이름 저장 실패:", error);
-  }
-}
-
-function generateSensorName(serialNumber, existingCount) {
-  // 이미 저장된 이름이 있으면 사용
-  if (sensorCustomNames.has(serialNumber)) {
-    return sensorCustomNames.get(serialNumber);
-  }
-
-  // 새로운 센서면 자동 이름 생성
-  const newName = `센서${existingCount + 1}`;
-  sensorCustomNames.set(serialNumber, newName);
-  saveSensorCustomNames();
-  return newName;
-}
-
-function updateSensorCustomName(serialNumber, newName) {
-  sensorCustomNames.set(serialNumber, newName);
-  saveSensorCustomNames();
-
-  // 해당 센서 찾아서 displayName 업데이트
-  const sensor = sensors.find((s) => s.serialNumber === serialNumber);
-  if (sensor) {
-    sensor.customName = newName;
-    renderSensorCards(); // UI 다시 렌더링
   }
 }
 
@@ -173,23 +138,63 @@ function setupEventListeners() {
   });
 }
 
-// WebSocket 콜백 설정
+function saveSensorCustomNames() {
+  try {
+    const namesObj = Object.fromEntries(sensorCustomNames);
+    localStorage.setItem("sensorCustomNames", JSON.stringify(namesObj));
+    console.log("센서 이름 저장 완료:", namesObj);
+  } catch (error) {
+    console.error("센서 이름 저장 실패:", error);
+  }
+}
+
+function generateSensorName(serialNumber, existingCount) {
+  // 이미 저장된 이름이 있으면 사용
+  if (sensorCustomNames.has(serialNumber)) {
+    return sensorCustomNames.get(serialNumber);
+  }
+
+  // 새로운 센서면 자동 이름 생성
+  const newName = `센서${existingCount + 1}`;
+  sensorCustomNames.set(serialNumber, newName);
+  saveSensorCustomNames();
+  return newName;
+}
+
+function updateSensorCustomName(serialNumber, newName) {
+  sensorCustomNames.set(serialNumber, newName);
+  saveSensorCustomNames();
+
+  // 해당 센서 찾아서 displayName 업데이트
+  const sensor = sensors.find((s) => s.serialNumber === serialNumber);
+  if (sensor) {
+    sensor.customName = newName;
+    renderSensorCards(); // UI 다시 렌더링
+  }
+}
+
+// WebSocket 이벤트 콜백 설정(연결/끊김/에러/메시지)
 function setupWebSocketCallbacks() {
+  // 연결 성공
   wsClient.onConnect = function () {
     updateConnectionStatusWithSensorCount();
-    subscribeToAllSensors();
+    // 연결 상태 업데이트
 
-    // 재연결 성공 시 카운터 리셋
+    subscribeToAllSensors();
+    // 모든 센서 구독
+
     reconnectAttempts = 0;
     clearTimeout(reconnectTimer);
+    // 재연결 성공 시 카운터 리셋
 
-    // 센서 헬스 체크 시작
     startSensorHealthCheck();
+    // 센서 헬스 체크 시작
 
-    // 센서 목록 주기적 업데이트 시작
     startSensorListMonitoring();
+    // sensor/mappings 가져와서 센서 목록 주기적 업데이트 시작
   };
 
+  // 연결 끊김
   wsClient.onDisconnect = function () {
     updateConnectionStatus("disconnected", "연결 끊어짐");
 
@@ -203,6 +208,7 @@ function setupWebSocketCallbacks() {
     attemptReconnect();
   };
 
+  // 에러 발생
   wsClient.onError = function (error) {
     updateConnectionStatus(
       "disconnected",
@@ -218,13 +224,145 @@ function setupWebSocketCallbacks() {
     // 자동 재연결 시도
     attemptReconnect();
   };
+}
 
-  wsClient.onMessage = function (destination, body, headers) {
-    handleSensorMessage(destination, body);
+// 모든 센서 구독
+function subscribeToAllSensors() {
+  console.log("=== 센서 구독 시작 ===");
+  sensors.forEach((sensor, index) => {
+    wsClient.subscribe(sensor.topicPath, (body) => {
+      updateSensor(index, body); // ← 데이터 수신 시 호출
+      updateSensorHealth(sensor.topicPath); // 헬스체크 추가
+    });
+  });
+  console.log("=== 웹소켓 구독 완료 ===");
+}
+// 센서 데이터 업데이트
+// 센서 데이터 업데이트
+function updateSensor(sensorIndex, body) {
+  if (!body || body.trim() === "" || sensorIndex >= sensors.length) return;
 
-    // 센서 헬스 체크 업데이트
-    updateSensorHealth(destination);
-  };
+  const now = new Date();
+  const nowStr = now.toLocaleTimeString();
+  const sensor = sensors[sensorIndex];
+  const sensorId = `${sensor.modelName}_${sensor.portName}`;
+
+  updateSensorHealth(sensor.topicPath);
+  try {
+    // JSON 파싱
+    const data = JSON.parse(body);
+
+    // 센서 타입 확인
+    if (sensor.gasType === "LEL") {
+      // LEL 센서 데이터 처리 (기존 구조 유지)
+      const lelData = {
+        lel: data.lel || "--",
+        temperature: data.temperature || "--",
+        humidity: data.humidity || "--",
+        gasId: data.gasId || "--",
+      };
+      lelSensors.set(sensorId, lelData);
+      console.log("LEL 센서 데이터:", lelData);
+
+      // 🔥 LEL 센서의 실제 농도값 기반 알람 메시지 생성
+      const lelValue = lelData.lel;
+      if (lelValue !== "--") {
+        const lelStatus = calculateSensorGasStatus(sensorId, "LEL", lelValue);
+        if (lelStatus === "danger") {
+          const customAlarm = `DANGER: LEL 위험 농도 감지 (${lelValue}%)`;
+          sensorGroupAlarms.set(sensorId, customAlarm);
+        } else if (lelStatus === "warning") {
+          const customAlarm = `WARNING: LEL 경고 농도 감지 (${lelValue}%)`;
+          sensorGroupAlarms.set(sensorId, customAlarm);
+        } else {
+          sensorGroupAlarms.delete(sensorId); // 정상 시 알람 제거
+        }
+      }
+
+      console.log("----------------------------");
+    } else {
+      // 복합가스센서 데이터 처리 - 새로운 구조에 맞게 수정
+      const gasData = {
+        CO: data.co || data.CO || "--", // 소문자 우선, 대문자 fallback
+        O2: data.o2 || data.O2 || "--",
+        H2S: data.h2s || data.H2S || "--",
+        CO2: data.co2 || data.CO2 || "--",
+      };
+      sensorGroups.set(sensorId, gasData);
+      console.log("복합가스센서 데이터:", gasData);
+
+      // 🔥 각 가스의 실제 농도값 기반 알람 메시지 생성
+      let dangerGases = [];
+      let warningGases = [];
+
+      ["CO", "O2", "H2S", "CO2"].forEach((gasType) => {
+        const gasValue = gasData[gasType];
+        if (gasValue !== "--") {
+          const gasStatus = calculateSensorGasStatus(
+            sensorId,
+            gasType,
+            gasValue
+          );
+          if (gasStatus === "danger") {
+            dangerGases.push(
+              `${formatGasName(gasType)} 위험 (${gasValue}${
+                getSensorThreshold(sensorId, gasType)?.unit || ""
+              })`
+            );
+          } else if (gasStatus === "warning") {
+            warningGases.push(
+              `${formatGasName(gasType)} 경고 (${gasValue}${
+                getSensorThreshold(sensorId, gasType)?.unit || ""
+              })`
+            );
+          }
+        }
+      });
+
+      // 위험이 우선, 그 다음 경고
+      if (dangerGases.length > 0) {
+        const customAlarm = `DANGER: ${dangerGases.join(", ")}`;
+        sensorGroupAlarms.set(sensorId, customAlarm);
+      } else if (warningGases.length > 0) {
+        const customAlarm = `WARNING: ${warningGases.join(", ")}`;
+        sensorGroupAlarms.set(sensorId, customAlarm);
+      } else {
+        sensorGroupAlarms.delete(sensorId); // 정상 시 알람 제거
+      }
+    }
+
+    // 🔥 서버에서 온 알람 메시지는 참고용으로만 사용 (실제 농도값 기반 판단이 우선)
+    let serverAlarmMessage = "";
+    if (data.alarmResult) {
+      const alarmResult = data.alarmResult;
+      if (alarmResult.alarmLevel && alarmResult.alarmLevel !== "NORMAL") {
+        serverAlarmMessage = `${alarmResult.alarmLevel}`;
+        if (alarmResult.messages && alarmResult.messages.length > 0) {
+          serverAlarmMessage += `: ${alarmResult.messages.join(", ")}`;
+        }
+        console.log("서버 알람 메시지 (참고용):", serverAlarmMessage);
+      }
+    } else if (data.alarm && data.alarm.trim() !== "") {
+      // 기존 alarm 필드도 지원
+      serverAlarmMessage = data.alarm;
+      console.log("서버 알람 메시지 (참고용):", serverAlarmMessage);
+    }
+
+    // 마지막 업데이트 시간 갱신
+    elements.lastUpdateTime.textContent = nowStr;
+
+    // 현재 설정된 알람 메시지 로그 출력
+    const currentAlarm = sensorGroupAlarms.get(sensorId);
+    if (currentAlarm) {
+      console.log("🚨 사용자 설정 기반 알람:", currentAlarm);
+    }
+
+    // 웹소켓에서 데이터를 받은 후 UI 업데이트 호출
+    renderSensorCards();
+  } catch (error) {
+    console.error("데이터 파싱 실패:", error);
+    console.error("원본 데이터:", body);
+  }
 }
 
 // 자동 재연결 함수
@@ -444,9 +582,8 @@ function startSensorListMonitoring() {
     } catch (error) {
       console.warn("센서 목록 업데이트 실패:", error.message);
     }
-  }, 60000); // 60초마다
-
-  console.log("🔄 센서 목록 모니터링 시작 (60초 간격)");
+  }, 60000);
+  // 60초마다 센서 목록 업데이트 확인(뽑히는 센서를 감지하기 위함)
 }
 
 // 센서 목록 모니터링 중지
@@ -667,7 +804,7 @@ function manualReconnect() {
   loadSensors();
 }
 
-// 센서 카드 렌더링 수정
+// 웹소켓에서 데이터를 받은 후 UI업데이트사항 랜더링
 function renderSensorCards() {
   if (sensors.length === 0) {
     showNoSensorsState();
@@ -684,7 +821,7 @@ function renderSensorCards() {
     return nameA.localeCompare(nameB);
   });
 
-  sortedSensors.forEach((sensor, index) => {
+  sortedSensors.forEach((sensor) => {
     const sensorId = `${sensor.modelName}_${sensor.portName}`;
     let cardElement;
 
@@ -697,8 +834,7 @@ function renderSensorCards() {
     grid.appendChild(cardElement);
   });
 
-  // 출입 상태 및 시스템 상태 업데이트
-  updateAccessStatus();
+  // 🔥 안전 상태 확인 및 배너 업데이트(임계치 넘으면 카드 변경줌)
   updateSystemStatusBanner();
 
   // 연결 상태 업데이트
@@ -716,7 +852,6 @@ window.addEventListener("beforeunload", function () {
 // 연결 상태 업데이트
 function updateConnectionStatus(status, message) {
   const statusElement = elements.connectionStatus;
-  const statusIcon = statusElement.querySelector(".status-icon");
   const statusText = statusElement.querySelector(".status-text");
 
   // 기존 클래스 제거
@@ -729,14 +864,6 @@ function updateConnectionStatus(status, message) {
   // 새 상태 적용
   statusElement.classList.add(`status-${status}`);
   statusText.textContent = message;
-
-  if (status === "loading") {
-    // statusIcon.className = "fas fa-spinner fa-spin status-icon";
-  } else if (status === "connected") {
-    // statusIcon.className = "fas fa-circle status-icon";
-  } else {
-    // statusIcon.className = "fas fa-circle status-icon";
-  }
 }
 
 // 연결된 센서 개수로 상태 메시지 업데이트
@@ -749,7 +876,6 @@ function updateConnectionStatusWithSensorCount() {
 // 센서 정보 로딩
 async function loadSensors() {
   if (isLoadingSensors) {
-    console.log("이미 센서 로딩 중 - 중복 요청 방지");
     return;
   }
 
@@ -760,17 +886,12 @@ async function loadSensors() {
   try {
     const apiUrl = `http://${serverIp}:${serverPort}/api/sensor/mappings`;
     console.log("=== 센서 정보 로딩 시작 ===");
-    console.log("API URL:", apiUrl);
-
     const response = await fetch(apiUrl, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
       },
     });
-
-    console.log("HTTP 응답 코드:", response.status);
-    console.log("HTTP 응답 헤더:", response.headers);
 
     if (response.status === 200) {
       const responseData = await response.json();
@@ -839,109 +960,6 @@ function connectWebSocket() {
   wsClient.connect(wsUrl);
 }
 
-// 모든 센서 구독
-function subscribeToAllSensors() {
-  console.log("--- 센서 구독 시작 ---");
-
-  sensors.forEach((sensor, index) => {
-    console.log(`센서 ${index + 1}/${sensors.length}: ${sensor.displayName}`);
-    console.log(`  - 토픽: ${sensor.topicPath}`);
-
-    wsClient.subscribe(sensor.topicPath, (body) => {
-      updateSensor(index, body);
-    });
-
-    console.log("  ✓ 구독 완료");
-  });
-
-  console.log("=== 웹소켓 구독 완료 ===");
-}
-
-// 센서 메시지 처리
-function handleSensorMessage(destination, body) {
-  const sensorIndex = sensors.findIndex(
-    (sensor) => sensor.topicPath === destination
-  );
-  if (sensorIndex !== -1) {
-    updateSensor(sensorIndex, body);
-  }
-}
-
-// 센서 데이터 업데이트
-function updateSensor(sensorIndex, body) {
-  if (!body || body.trim() === "" || sensorIndex >= sensors.length) return;
-
-  const now = new Date();
-  const nowStr = now.toLocaleTimeString();
-  const sensor = sensors[sensorIndex];
-  const sensorId = `${sensor.modelName}_${sensor.portName}`;
-
-  console.log("=== 웹소켓 데이터 수신 ===");
-  console.log("시간:", nowStr);
-  console.log("센서:", sensorId, `(${sensor.displayName})`);
-  console.log("원본 데이터:", body);
-  console.log("데이터 길이:", body.length, "bytes");
-
-  try {
-    // JSON 파싱
-    const data = JSON.parse(body);
-    console.log("파싱된 데이터:", data);
-
-    // 센서 타입 확인
-    if (sensor.gasType === "LEL") {
-      // LEL 센서 데이터 처리 (기존 구조 유지)
-      const lelData = {
-        lel: data.lel || "--",
-        temperature: data.temperature || "--",
-        humidity: data.humidity || "--",
-        gasId: data.gasId || "--",
-      };
-      lelSensors.set(sensorId, lelData);
-      console.log("LEL 센서 데이터 저장:", lelData);
-    } else {
-      // 복합가스센서 데이터 처리 - 새로운 구조에 맞게 수정
-      const gasData = {
-        CO: data.co || data.CO || "--", // 소문자 우선, 대문자 fallback
-        O2: data.o2 || data.O2 || "--",
-        H2S: data.h2s || data.H2S || "--",
-        CO2: data.co2 || data.CO2 || "--",
-      };
-      sensorGroups.set(sensorId, gasData);
-      console.log("복합가스센서 데이터 저장:", gasData);
-    }
-
-    // 알람 메시지 처리 - 새로운 구조에 맞게 수정
-    let alarmMessage = "";
-    if (data.alarmResult) {
-      const alarmResult = data.alarmResult;
-      if (alarmResult.alarmLevel && alarmResult.alarmLevel !== "NORMAL") {
-        alarmMessage = `${alarmResult.alarmLevel}`;
-        if (alarmResult.messages && alarmResult.messages.length > 0) {
-          alarmMessage += `: ${alarmResult.messages.join(", ")}`;
-        }
-      }
-    } else if (data.alarm && data.alarm.trim() !== "") {
-      // 기존 alarm 필드도 지원
-      alarmMessage = data.alarm;
-    }
-
-    if (alarmMessage) {
-      sensorGroupAlarms.set(sensorId, alarmMessage);
-    } else {
-      sensorGroupAlarms.delete(sensorId);
-    }
-
-    // 마지막 업데이트 시간 갱신
-    elements.lastUpdateTime.textContent = nowStr;
-
-    // UI 업데이트
-    renderSensorCards();
-  } catch (error) {
-    console.error("데이터 파싱 실패:", error);
-    console.error("원본 데이터:", body);
-  }
-}
-
 // UI 상태 함수들
 function showLoadingState() {
   elements.loadingContainer.style.display = "flex";
@@ -1002,7 +1020,6 @@ function renderSensorCards() {
   });
 
   // 출입 상태 및 시스템 상태 업데이트
-  updateAccessStatus();
   updateSystemStatusBanner();
 
   // 연결 상태 업데이트
@@ -1022,7 +1039,14 @@ function createLelSensorCard(sensorId, sensor) {
 
   // LEL 값으로 상태 계산
   const lelValue = lelData.lel || "--";
-  const status = calculateSensorGasStatus(sensorId, "LEL", lelValue);
+  let status = calculateSensorGasStatus(sensorId, "LEL", lelValue);
+
+  // 🔥 알람 메시지 레벨도 센서 카드 상태에 반영
+  if (alarmLevel === "danger") {
+    status = SensorStatus.DANGER; // 알람이 위험 레벨이면 전체 카드도 위험으로
+  } else if (alarmLevel === "warning" && status === SensorStatus.NORMAL) {
+    status = SensorStatus.WARNING; // 알람이 경고 레벨이고 현재 정상이면 경고로
+  }
 
   let statusColor, statusText;
   switch (status) {
@@ -1138,6 +1162,13 @@ function createSensorGroupCard(sensorId, sensor) {
     }
   });
 
+  // 🔥 알람 메시지 레벨도 센서 카드 상태에 반영
+  if (alarmLevel === "danger") {
+    hasError = true; // 알람이 위험 레벨이면 전체 카드도 위험으로
+  } else if (alarmLevel === "warning") {
+    hasWarning = true; // 알람이 경고 레벨이면 전체 카드도 경고로
+  }
+
   const groupStatus = hasError
     ? SensorStatus.DANGER
     : hasWarning
@@ -1245,12 +1276,19 @@ function calculateSensorGasStatus(sensorId, gasType, gasValue) {
   return calculateGasStatus(gasType, gasValue, threshold);
 }
 
-// 알람 메시지 레벨 결정 함수
+// 알람 메시지 레벨 결정 함수 (사용자 설정 임계값 우선 적용)
 function getAlarmMessageLevel(alarmMessage) {
   if (!alarmMessage || alarmMessage.trim() === "") {
     return "normal";
   }
 
+  // 🔥 1. 먼저 알람 메시지에서 농도값을 추출하여 사용자 설정 임계값과 비교
+  const concentrationLevel = analyzeAlarmConcentration(alarmMessage);
+  if (concentrationLevel !== "normal") {
+    return concentrationLevel; // 농도 기반 판단이 우선
+  }
+
+  // 🔥 2. 농도값이 없을 때만 키워드로 판단
   const upperAlarmMessage = alarmMessage.toUpperCase();
 
   if (
@@ -1273,6 +1311,55 @@ function getAlarmMessageLevel(alarmMessage) {
     // 레벨을 알 수 없는 경우 기본적으로 경고로 처리
     return "warning";
   }
+}
+
+// 🔥 알람 메시지에서 농도값을 분석하여 사용자 설정 임계값과 비교
+function analyzeAlarmConcentration(alarmMessage) {
+  if (!alarmMessage) return "normal";
+
+  // PPM 농도값 추출 정규식 패턴들
+  const ppmPatterns = [
+    /(\d+(?:\.\d+)?)\s*ppm/i, // "2145.0 ppm" 또는 "2145 ppm"
+    /농도.*?(\d+(?:\.\d+)?)/, // "농도 주의 (2145.0"
+    /(\d+(?:\.\d+)?)\s*%/i, // 퍼센트 농도 "23.5%"
+  ];
+
+  let gasType = null;
+  let concentration = null;
+
+  // 가스 타입 식별
+  if (alarmMessage.includes("CO₂") || alarmMessage.includes("CO2")) {
+    gasType = "CO2";
+  } else if (
+    alarmMessage.includes("CO") &&
+    !alarmMessage.includes("CO₂") &&
+    !alarmMessage.includes("CO2")
+  ) {
+    gasType = "CO";
+  } else if (alarmMessage.includes("H₂S") || alarmMessage.includes("H2S")) {
+    gasType = "H2S";
+  } else if (alarmMessage.includes("O₂") || alarmMessage.includes("O2")) {
+    gasType = "O2";
+  } else if (alarmMessage.includes("LEL")) {
+    gasType = "LEL";
+  }
+
+  // 농도값 추출
+  for (const pattern of ppmPatterns) {
+    const match = alarmMessage.match(pattern);
+    if (match) {
+      concentration = parseFloat(match[1]);
+      break;
+    }
+  }
+
+  // 가스타입과 농도값이 모두 있을 때 기존 calculateGasStatus 함수 활용
+  if (gasType && concentration !== null && !isNaN(concentration)) {
+    const gasStatus = calculateGasStatus(gasType, concentration.toString());
+    return gasStatus; // "normal", "warning", "danger", "error" 반환
+  }
+
+  return "normal"; // 농도값을 파싱할 수 없으면 키워드 판단으로 넘김
 }
 
 // 설정 관련 함수들
@@ -1553,7 +1640,6 @@ function checkOverallSafetyStatus() {
       if (sensor) {
         // 알람 메시지의 레벨에 따라 구분 처리
         const upperAlarmMessage = alarmMessage.toUpperCase();
-
         if (
           upperAlarmMessage.includes("DANGER") ||
           upperAlarmMessage.includes("CRITICAL") ||
@@ -1567,43 +1653,16 @@ function checkOverallSafetyStatus() {
           upperAlarmMessage.includes("LOW")
         ) {
           hasWarning = true;
-        } else {
-          // 레벨을 알 수 없는 경우 기본적으로 위험으로 처리
-          hasDanger = true;
-          problemSensors.push(`${sensor.displayName} 알람`);
         }
       }
     }
   }
-
-  console.log("전체 안전 상태 확인:", {
-    isDangerous: hasDanger,
-    hasWarning: hasWarning,
-    problemSensors: problemSensors,
-  });
 
   return {
     isDangerous: hasDanger,
     hasWarning: hasWarning,
     problemSensors: problemSensors,
   };
-}
-
-function updateAccessStatus() {
-  const safetyStatus = checkOverallSafetyStatus();
-
-  // 기존 출입 상태 요소 제거
-  const existingStatus = document.querySelector(".access-status");
-  if (existingStatus) {
-    existingStatus.remove();
-  }
-
-  // 새로운 출입 상태 요소 생성
-  const accessStatusEl = document.createElement("div");
-  accessStatusEl.className = "access-status";
-
-  // body에 추가
-  document.body.appendChild(accessStatusEl);
 }
 
 const handleDangerousState = () => {
@@ -1784,7 +1843,7 @@ function updateSystemStatusBanner() {
         <span>주의 필요</span>
       </div>
       <div class="system-status-message">
-        일부 센서에서 경고 수치가 감지되었습니다. 주의하세요.
+        경고 수치가 감지되었습니다. 주의하세요.
       </div>
     `;
   } else {
@@ -1874,18 +1933,45 @@ function loadAlarmMasterSetting() {
     const saved = localStorage.getItem("alarmMasterEnabled");
     if (saved !== null) {
       isAlarmMasterEnabled = saved === "true";
-      // HTML 스위치 상태도 동기화
-      const toggleElement = document.getElementById("beaconToggle");
-      if (toggleElement) {
-        toggleElement.checked = isAlarmMasterEnabled;
-      }
       console.log(
         `💾 저장된 알람 마스터 설정 로드: ${
           isAlarmMasterEnabled ? "ON" : "OFF"
         }`
       );
+    } else {
+      // 처음 실행시 기본값 설정
+      isAlarmMasterEnabled = true; // 기본값: ON
+      localStorage.setItem("alarmMasterEnabled", "true");
+      console.log("🔧 알람 마스터 설정 초기화: ON (기본값)");
     }
+
+    // 🔥 HTML 스위치 상태 동기화 (DOM이 로드된 후 실행)
+    setTimeout(() => {
+      const toggleElement = document.getElementById("beaconToggle");
+      if (toggleElement) {
+        toggleElement.checked = isAlarmMasterEnabled;
+        console.log(
+          `✅ HTML 토글 스위치 동기화: ${isAlarmMasterEnabled ? "ON" : "OFF"}`
+        );
+
+        // 🔥 이벤트 리스너도 추가 (만약 없다면)
+        if (!toggleElement.hasAttribute("data-listener-added")) {
+          toggleElement.addEventListener("change", function () {
+            toggleAlarmMaster(this.checked);
+          });
+          toggleElement.setAttribute("data-listener-added", "true");
+          console.log("🔗 토글 스위치 이벤트 리스너 추가됨");
+        }
+      } else {
+        console.warn(
+          "⚠️ beaconToggle 요소를 찾을 수 없습니다. HTML을 확인하세요."
+        );
+      }
+    }, 100); // DOM 로딩 완료 후 실행
   } catch (error) {
     console.error("알람 마스터 설정 로드 중 오류:", error);
+    // 오류 발생시 기본값으로 설정
+    isAlarmMasterEnabled = true;
+    localStorage.setItem("alarmMasterEnabled", "true");
   }
 }
