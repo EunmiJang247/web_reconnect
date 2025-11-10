@@ -1038,7 +1038,19 @@ function createLelSensorCard(sensorId, sensor) {
   const alarmLevel = getAlarmMessageLevel(alarmMessage);
 
   // LEL 값으로 상태 계산
-  const lelValue = lelData.lel || "--";
+  let lelValue = lelData.lel || "--";
+
+  // 🔥 LEL 값이 100을 넘으면 100으로 제한
+  if (lelValue !== "--") {
+    const numericValue = parseFloat(lelValue);
+    if (!isNaN(numericValue) && numericValue > 100) {
+      lelValue = "100.0";
+      console.warn(
+        `⚠️ LEL 값이 100%를 초과하여 100%로 제한됨: 원본값 ${lelData.lel}% → 표시값 ${lelValue}%`
+      );
+    }
+  }
+
   let status = calculateSensorGasStatus(sensorId, "LEL", lelValue);
 
   // 🔥 알람 메시지 레벨도 센서 카드 상태에 반영
@@ -1116,7 +1128,9 @@ function createLelSensorCard(sensorId, sensor) {
             </div>
             <div class="lel-item">
                 <div class="lel-item-label">가스ID</div>
-                <div class="lel-item-value">${lelData.gasId}</div>
+                <div class="lel-item-value">${lelData.gasId} ${getGasNameFromId(
+    lelData.gasId
+  )}</div>
             </div>
         </div>
         
@@ -1261,6 +1275,25 @@ function createGasCard(sensorId, gasType, gasValue) {
             <div class="gas-range">${normalRangeText}</div>
         </div>
     `;
+}
+
+// 가스 ID를 가스명으로 변환하는 함수
+function getGasNameFromId(gasId) {
+  const gasIdMap = {
+    0: "(가스 없음)",
+    1: "(수소)",
+    2: "(수소 혼합)",
+    3: "(메탄)",
+    4: "(가벼운 가스)",
+    5: "(중간 밀도 가스)",
+    6: "(무거운 가스)",
+    253: "(알 수 없는 가스)",
+    254: "(측정 하한 미만)",
+    255: "(측정 상한 초과)",
+  };
+
+  const numericGasId = parseInt(gasId);
+  return gasIdMap[numericGasId] || `Unknown ID: ${gasId}`;
 }
 
 // 센서별 임계치 가져오기

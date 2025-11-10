@@ -1207,3 +1207,20 @@ body {
     rgba(192, 57, 43, 0.05)
   );
 }
+
+/* 가스 타입 정보 스타일 */
+.gas-type-info {
+  padding: 0.8rem;
+  margin-top: 1rem;
+  background: rgba(52, 152, 219, 0.05);
+  border: 1px solid rgba(52, 152, 219, 0.2);
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.gas-type-name {
+  color: #2c3e50;
+  font-weight: 700;
+  font-size: 0.7rem;
+  line-height: 1.3;
+}
