@@ -1771,8 +1771,7 @@ async function callAlertAPI(turnOn, isManual = false) {
   }
 
   if (alertPorts.length === 0) {
-    console.error("사용 가능한 경광등 포트가 없습니다.");
-    alert("경광등을 찾을 수 없습니다. 설정을 확인해주세요.");
+    console.log("사용 가능한 경광등 포트가 없어 알람 API 호출을 건너뜁니다.");
     return;
   }
 
