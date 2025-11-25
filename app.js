@@ -1779,65 +1779,81 @@ async function callAlertAPI(turnOn, isManual = false) {
   const action = turnOn ? "켜기" : "끄기";
   const portNames = alertPorts.join(", ");
 
-  try {
-    const response = await fetch(
-      `http://${serverIp}:${serverPort}/api/alert/${endpoint}?portNames=${encodeURIComponent(
-        portNames
-      )}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    if (response.ok) {
-      console.log(`🚨 알람 ${action} API 호출 성공 (포트: ${portNames})`);
-
-      // 수동 조작인 경우 상태 업데이트
-      if (isManual) {
-        if (turnOn) {
-          lampOn = true;
-          isManuallyDisabled = false;
-          // 켤 때는 마스터 스위치도 자동으로 ON
-          isAlarmMasterEnabled = true;
-          const toggleElement = document.getElementById("beaconToggle");
-          if (toggleElement) {
-            toggleElement.checked = true;
-          }
-          localStorage.setItem("alarmMasterEnabled", "true");
-          console.log(
-            "✅ 수동으로 알람을 켰습니다. 전체 알람 시스템이 활성화되었습니다."
-          );
-        } else {
-          lampOn = false;
-          isManuallyDisabled = true;
-          // 끌 때는 마스터 스위치도 자동으로 OFF
-          isAlarmMasterEnabled = false;
-          const toggleElement = document.getElementById("beaconToggle");
-          if (toggleElement) {
-            toggleElement.checked = false;
-          }
-          localStorage.setItem("alarmMasterEnabled", "false");
-          console.log(
-            "⛔ 수동으로 알람을 껐습니다. 전체 알람 시스템이 비활성화되었습니다."
-          );
-          // Alert 메시지 표시
-          alert(
-            "🚨 알람이 수동으로 꺼졌습니다!\n\n조치를 취한 후 설정에서 알람 스위치를 다시 켜주세요."
-          );
+  // 🔥 5번 연속 호출
+  let successCount = 0;
+  for (let i = 1; i <= 5; i++) {
+    try {
+      const response = await fetch(
+        `http://${serverIp}:${serverPort}/api/alert/${endpoint}?portNames=${encodeURIComponent(
+          portNames
+        )}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
         }
+      );
+
+      if (response.ok) {
+        successCount++;
+        console.log(
+          `🚨 알람 ${action} API 호출 성공 [${i}/5] (포트: ${portNames})`
+        );
+      } else {
+        console.error(
+          `알람 ${action} API 호출 실패 [${i}/5]:`,
+          response.status,
+          response.statusText
+        );
       }
+    } catch (error) {
+      console.error(`알람 ${action} API 호출 중 오류 발생 [${i}/5]:`, error);
+    }
+
+    // 마지막 호출이 아니면 50ms 대기
+    if (i < 5) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
+
+  console.log(
+    `✅ 알람 ${action} API 총 5회 호출 완료 (성공: ${successCount}/5)`
+  );
+
+  // 수동 조작인 경우 상태 업데이트 (1회만 실행)
+  if (isManual) {
+    if (turnOn) {
+      lampOn = true;
+      isManuallyDisabled = false;
+      // 켤 때는 마스터 스위치도 자동으로 ON
+      isAlarmMasterEnabled = true;
+      const toggleElement = document.getElementById("beaconToggle");
+      if (toggleElement) {
+        toggleElement.checked = true;
+      }
+      localStorage.setItem("alarmMasterEnabled", "true");
+      console.log(
+        "✅ 수동으로 알람을 켰습니다. 전체 알람 시스템이 활성화되었습니다."
+      );
     } else {
-      console.error(
-        `알람 ${action} API 호출 실패:`,
-        response.status,
-        response.statusText
+      lampOn = false;
+      isManuallyDisabled = true;
+      // 끌 때는 마스터 스위치도 자동으로 OFF
+      isAlarmMasterEnabled = false;
+      const toggleElement = document.getElementById("beaconToggle");
+      if (toggleElement) {
+        toggleElement.checked = false;
+      }
+      localStorage.setItem("alarmMasterEnabled", "false");
+      console.log(
+        "⛔ 수동으로 알람을 껐습니다. 전체 알람 시스템이 비활성화되었습니다."
+      );
+      // Alert 메시지 표시
+      alert(
+        "🚨 알람이 수동으로 꺼졌습니다!\n\n조치를 취한 후 설정에서 알람 스위치를 다시 켜주세요."
       );
     }
-  } catch (error) {
-    console.error(`알람 ${action} API 호출 중 오류 발생:`, error);
   }
 }
 
