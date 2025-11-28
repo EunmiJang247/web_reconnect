@@ -170,8 +170,45 @@
       </div>
     </div>
 
+    <!-- JavaScript 파일들을 올바른 순서로 로드 -->
+    <!-- 1. 외부 라이브러리 -->
     <script src="sensor-info.js"></script>
     <script src="websocket-client.js"></script>
-    <script src="app.js"></script>
+
+    <!-- 2. 설정 및 전역 변수 -->
+    <script src="js/config.js"></script>
+
+    <!-- 3. 유틸리티 -->
+    <script src="js/utils.js"></script>
+
+    <!-- 4. 로컬 스토리지 관리 -->
+    <script src="js/storage.js"></script>
+
+    <!-- 5. UI 상태 관리 -->
+    <script src="js/ui-state.js"></script>
+
+    <!-- 6. UI 렌더링 -->
+    <script src="js/ui-render.js"></script>
+
+    <!-- 7. 모달 관리 -->
+    <script src="js/modal.js"></script>
+
+    <!-- 8. 임계치 관리 -->
+    <script src="js/threshold.js"></script>
+
+    <!-- 9. 센서 데이터 -->
+    <script src="js/sensor-data.js"></script>
+
+    <!-- 10. 센서 헬스 체크 -->
+    <script src="js/sensor-health.js"></script>
+
+    <!-- 11. WebSocket 관리 -->
+    <script src="js/websocket.js"></script>
+
+    <!-- 12. 알람 시스템 -->
+    <script src="js/alarm.js"></script>
+
+    <!-- 13. 메인 초기화 (마지막에 로드) -->
+    <script src="js/main.js"></script>
   </body>
 </html>
