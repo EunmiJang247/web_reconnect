@@ -44,6 +44,22 @@ function setupEventListeners() {
       closeThresholdModal();
     }
   });
+
+  // 모달 내부 컨텐츠 클릭 시 이벤트 전파 방지
+  document
+    .querySelector(".modal-content")
+    .addEventListener("click", function (e) {
+      e.stopPropagation();
+    });
+
+  const thresholdContent = document.querySelector(
+    "#thresholdModal .modal-content"
+  );
+  if (thresholdContent) {
+    thresholdContent.addEventListener("click", function (e) {
+      e.stopPropagation();
+    });
+  }
 }
 
 // 설정 모달 열기

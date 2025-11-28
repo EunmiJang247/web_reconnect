@@ -22,6 +22,15 @@ function openThresholdModal(sensorId, sensorType) {
     content.appendChild(section);
   });
 
+  // 에러 메시지 영역 추가
+  const errorDiv = document.createElement("div");
+  errorDiv.id = "thresholdErrorMessage";
+  errorDiv.style.color = "red";
+  errorDiv.style.marginTop = "1rem";
+  errorDiv.style.fontSize = "0.9rem";
+  errorDiv.style.display = "none";
+  content.appendChild(errorDiv);
+
   elements.thresholdModal.style.display = "block";
 }
 
@@ -97,6 +106,59 @@ function saveThresholds() {
 
   const sensorThreshold = sensorThresholds.get(currentThresholdSensorId);
 
+  // 🔥 유효성 검사
+  let errorMessages = [];
+
+  gasTypes.forEach((gasType) => {
+    const normalMin = parseFloat(
+      document.getElementById(`normal_min_${gasType}`).value
+    );
+    const normalMax = parseFloat(
+      document.getElementById(`normal_max_${gasType}`).value
+    );
+    const warningMin = parseFloat(
+      document.getElementById(`warning_min_${gasType}`).value
+    );
+    const warningMax = parseFloat(
+      document.getElementById(`warning_max_${gasType}`).value
+    );
+    const dangerMin = parseFloat(
+      document.getElementById(`danger_min_${gasType}`).value
+    );
+
+    // 유효성 검사
+    if (normalMin >= normalMax) {
+      errorMessages.push(
+        `${formatGasName(gasType)}: 정상 최소값은 최대값보다 작아야 합니다.`
+      );
+    }
+    if (warningMin >= warningMax) {
+      errorMessages.push(
+        `${formatGasName(gasType)}: 경고 최소값은 최대값보다 작아야 합니다.`
+      );
+    }
+    if (normalMax > warningMin) {
+      errorMessages.push(
+        `${formatGasName(gasType)}: 경고 최소값은 정상 최대값보다 커야 합니다.`
+      );
+    }
+    if (warningMax > dangerMin) {
+      errorMessages.push(
+        `${formatGasName(gasType)}: 위험 최소값은 경고 최대값보다 커야 합니다.`
+      );
+    }
+  });
+
+  // 오류가 있으면 저장하지 않고 에러 메시지 표시
+  const errorDiv = document.getElementById("thresholdErrorMessage");
+  if (errorMessages.length > 0) {
+    errorDiv.innerHTML = errorMessages.join("<br>");
+    errorDiv.style.display = "block";
+    return;
+  }
+
+  // 에러가 없으면 저장
+  errorDiv.style.display = "none";
   gasTypes.forEach((gasType) => {
     const normalMin = parseFloat(
       document.getElementById(`normal_min_${gasType}`).value

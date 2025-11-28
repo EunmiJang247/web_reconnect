@@ -104,7 +104,7 @@ function createLelSensorCard(sensorId, sensor) {
                      이름 변경
                 </button>
                 <button class="btn btn-secret" onclick="openThresholdModal('${sensorId}', 'lel')">
-                    <i class="fas fa-cog"></i> 임계치 설정
+                    임계치 설정
                 </button>
             </div>
         </div>
