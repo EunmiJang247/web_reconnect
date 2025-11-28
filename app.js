@@ -13,7 +13,8 @@ let currentThresholdSensorType = null;
 let lampOn = false;
 let alertPorts = []; // 경광등 포트 목록
 let isAlarmMasterEnabled = true; // 알람 마스터 스위치 상태 (기본값: ON)
-let isManuallyDisabled = false; // 수동으로 알람을 끈 상태인지 확인
+let isManuallyTurnOFF = false; // 수동으로 알람을 끈 상태인지 확인
+let isManuallyTurnON = false; // 수동으로 알람을 켠 상태인지 확인
 
 // 전역 변수에 추가
 let reconnectAttempts = 0;
@@ -226,6 +227,55 @@ function setupWebSocketCallbacks() {
   };
 }
 
+// 알람 마스터 스위치 설정 로드
+function loadAlarmMasterSetting() {
+  try {
+    const saved = localStorage.getItem("alarmMasterEnabled");
+    if (saved !== null) {
+      isAlarmMasterEnabled = saved === "true";
+      console.log(
+        `💾 저장된 알람 마스터 설정 로드: ${
+          isAlarmMasterEnabled ? "ON" : "OFF"
+        }`
+      );
+    } else {
+      // 처음 실행시 기본값 설정
+      isAlarmMasterEnabled = true; // 기본값: ON
+      localStorage.setItem("alarmMasterEnabled", "true");
+      console.log("🔧 알람 마스터 설정 초기화: ON (기본값)");
+    }
+
+    // 🔥 HTML 스위치 상태 동기화 (DOM이 로드된 후 실행)
+    setTimeout(() => {
+      const toggleElement = document.getElementById("beaconToggle");
+      if (toggleElement) {
+        toggleElement.checked = isAlarmMasterEnabled;
+        console.log(
+          `✅ HTML 토글 스위치 동기화: ${isAlarmMasterEnabled ? "ON" : "OFF"}`
+        );
+
+        // 🔥 이벤트 리스너도 추가 (만약 없다면)
+        if (!toggleElement.hasAttribute("data-listener-added")) {
+          toggleElement.addEventListener("change", function () {
+            toggleAlarmMaster(this.checked);
+          });
+          toggleElement.setAttribute("data-listener-added", "true");
+          console.log("🔗 토글 스위치 이벤트 리스너 추가됨");
+        }
+      } else {
+        console.warn(
+          "⚠️ beaconToggle 요소를 찾을 수 없습니다. HTML을 확인하세요."
+        );
+      }
+    }, 100); // DOM 로딩 완료 후 실행
+  } catch (error) {
+    console.error("알람 마스터 설정 로드 중 오류:", error);
+    // 오류 발생시 기본값으로 설정
+    isAlarmMasterEnabled = true;
+    localStorage.setItem("alarmMasterEnabled", "true");
+  }
+}
+
 // 모든 센서 구독
 function subscribeToAllSensors() {
   console.log("=== 센서 구독 시작 ===");
@@ -237,7 +287,7 @@ function subscribeToAllSensors() {
   });
   console.log("=== 웹소켓 구독 완료 ===");
 }
-// 센서 데이터 업데이트
+
 // 센서 데이터 업데이트
 function updateSensor(sensorIndex, body) {
   if (!body || body.trim() === "" || sensorIndex >= sensors.length) return;
@@ -263,6 +313,7 @@ function updateSensor(sensorIndex, body) {
       };
       lelSensors.set(sensorId, lelData);
       console.log("LEL 센서 데이터:", lelData);
+      console.log("현재 LEL 임계치 설정:", getSensorThreshold(sensorId, "LEL"));
 
       // 🔥 LEL 센서의 실제 농도값 기반 알람 메시지 생성
       const lelValue = lelData.lel;
@@ -911,8 +962,6 @@ async function loadSensors() {
       } else {
         throw new Error("예상하지 못한 응답 형식입니다.");
       }
-
-      console.log("추출된 센서 데이터:", sensorData);
 
       // 센서 데이터 파싱
       const validSensorData = sensorData.filter((item) => {
@@ -1710,7 +1759,7 @@ const handleDangerousState = () => {
   }
 
   // 수동으로 비활성화된 경우 알람을 울리지 않음
-  if (isManuallyDisabled) {
+  if (isManuallyTurnOFF) {
     console.log(
       "수동으로 알람이 비활성화된 상태입니다. 마스터 스위치를 다시 조작하거나 켜기 버튼을 눌러주세요."
     );
@@ -1723,11 +1772,19 @@ const handleDangerousState = () => {
   // 알람 API 호출 (켜기)
   callAlertAPI(true);
 }; // 안전 상태로 복귀할 때 호출할 함수 추가
+
 const handleSafeState = () => {
+  // 🔥 수동으로 켠 경우 자동으로 끄지 않음
+  if (isManuallyTurnON && lampOn === true) {
+    // 수동으로 켠 상태에서는 자동으로 끄지 않음
+    console.log("수동으로 켠 상태이므로 자동으로 끄지 않습니다.");
+    return;
+  }
+
   if (!lampOn) return;
   console.log("안전 상태로 복귀됨. 알람을 자동으로 끕니다.");
   lampOn = false;
-  // 자동으로 끄는 경우에는 isManuallyDisabled를 변경하지 않음
+  // 자동으로 끄는 경우에는 isManuallyTurnOFF를 변경하지 않음
 
   // 알람 API 호출 (끄기)
   callAlertAPI(false);
@@ -1781,7 +1838,7 @@ async function callAlertAPI(turnOn, isManual = false) {
 
   // 🔥 5번 연속 호출
   let successCount = 0;
-  for (let i = 1; i <= 5; i++) {
+  for (let i = 1; i <= 3; i++) {
     try {
       const response = await fetch(
         `http://${serverIp}:${serverPort}/api/alert/${endpoint}?portNames=${encodeURIComponent(
@@ -1798,11 +1855,11 @@ async function callAlertAPI(turnOn, isManual = false) {
       if (response.ok) {
         successCount++;
         console.log(
-          `🚨 알람 ${action} API 호출 성공 [${i}/5] (포트: ${portNames})`
+          `🚨 알람 ${action} API 호출 성공 [${i}/3] (포트: ${portNames})`
         );
       } else {
         console.error(
-          `알람 ${action} API 호출 실패 [${i}/5]:`,
+          `알람 ${action} API 호출 실패 [${i}/3]:`,
           response.status,
           response.statusText
         );
@@ -1812,20 +1869,22 @@ async function callAlertAPI(turnOn, isManual = false) {
     }
 
     // 마지막 호출이 아니면 50ms 대기
-    if (i < 5) {
+    if (i < 3) {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
   }
 
   console.log(
-    `✅ 알람 ${action} API 총 5회 호출 완료 (성공: ${successCount}/5)`
+    `✅ 알람 ${action} API 총 3회 호출 완료 (성공: ${successCount}/3)`
   );
 
-  // 수동 조작인 경우 상태 업데이트 (1회만 실행)
+  // 수동 조작인 경우
   if (isManual) {
     if (turnOn) {
+      // 경광등을 수동으로 킨 경우
       lampOn = true;
-      isManuallyDisabled = false;
+      isManuallyTurnOFF = false;
+      isManuallyTurnON = true;
       // 켤 때는 마스터 스위치도 자동으로 ON
       isAlarmMasterEnabled = true;
       const toggleElement = document.getElementById("beaconToggle");
@@ -1837,8 +1896,10 @@ async function callAlertAPI(turnOn, isManual = false) {
         "✅ 수동으로 알람을 켰습니다. 전체 알람 시스템이 활성화되었습니다."
       );
     } else {
+      // 경광등을 수동으로 끈 경우
       lampOn = false;
-      isManuallyDisabled = true;
+      isManuallyTurnOFF = true;
+      isManuallyTurnON = false;
       // 끌 때는 마스터 스위치도 자동으로 OFF
       isAlarmMasterEnabled = false;
       const toggleElement = document.getElementById("beaconToggle");
@@ -1885,6 +1946,8 @@ function updateSystemStatusBanner() {
       </div>
     `;
   } else if (safetyStatus.hasWarning) {
+    // 주의 상태일 때 알람 끄기
+    handleSafeState();
     bannerEl.classList.add("warning");
     bannerEl.innerHTML = `
       <div class="system-status-title" style="color: #ffffff;">
@@ -1956,7 +2019,7 @@ function toggleAlarmMaster(enabled) {
 
   // 스위치 조작 시 수동 비활성화 상태 해제
   if (enabled) {
-    isManuallyDisabled = false;
+    isManuallyTurnOFF = false;
     console.log(
       "✅ 알람 시스템이 활성화되었습니다. 수동 비활성화 상태가 해제되고, 위험 감지 시 자동으로 알람이 울립니다."
     );
@@ -1972,54 +2035,5 @@ function toggleAlarmMaster(enabled) {
     console.log(
       "❌ 알람 시스템이 비활성화되었습니다. 위험 감지되어도 알람이 울리지 않습니다."
     );
-  }
-}
-
-// 알람 마스터 스위치 설정 로드
-function loadAlarmMasterSetting() {
-  try {
-    const saved = localStorage.getItem("alarmMasterEnabled");
-    if (saved !== null) {
-      isAlarmMasterEnabled = saved === "true";
-      console.log(
-        `💾 저장된 알람 마스터 설정 로드: ${
-          isAlarmMasterEnabled ? "ON" : "OFF"
-        }`
-      );
-    } else {
-      // 처음 실행시 기본값 설정
-      isAlarmMasterEnabled = true; // 기본값: ON
-      localStorage.setItem("alarmMasterEnabled", "true");
-      console.log("🔧 알람 마스터 설정 초기화: ON (기본값)");
-    }
-
-    // 🔥 HTML 스위치 상태 동기화 (DOM이 로드된 후 실행)
-    setTimeout(() => {
-      const toggleElement = document.getElementById("beaconToggle");
-      if (toggleElement) {
-        toggleElement.checked = isAlarmMasterEnabled;
-        console.log(
-          `✅ HTML 토글 스위치 동기화: ${isAlarmMasterEnabled ? "ON" : "OFF"}`
-        );
-
-        // 🔥 이벤트 리스너도 추가 (만약 없다면)
-        if (!toggleElement.hasAttribute("data-listener-added")) {
-          toggleElement.addEventListener("change", function () {
-            toggleAlarmMaster(this.checked);
-          });
-          toggleElement.setAttribute("data-listener-added", "true");
-          console.log("🔗 토글 스위치 이벤트 리스너 추가됨");
-        }
-      } else {
-        console.warn(
-          "⚠️ beaconToggle 요소를 찾을 수 없습니다. HTML을 확인하세요."
-        );
-      }
-    }, 100); // DOM 로딩 완료 후 실행
-  } catch (error) {
-    console.error("알람 마스터 설정 로드 중 오류:", error);
-    // 오류 발생시 기본값으로 설정
-    isAlarmMasterEnabled = true;
-    localStorage.setItem("alarmMasterEnabled", "true");
   }
 }
