@@ -1,6 +1,10 @@
 // ========================================
-// 알람 시스템 (경광등 제어)
+// 알람 시스템 (경광등 및 배기팬 제어)
 // ========================================
+
+// 배기팬 상태 저장
+let fan1State = false;
+let fan2State = false;
 
 // 위험 상태 처리
 const handleDangerousState = () => {
@@ -259,4 +263,70 @@ function checkOverallSafetyStatus() {
     hasWarning: hasWarning,
     problemSensors: problemSensors,
   };
+}
+
+// ========================================
+// 배기팬 제어 함수
+// ========================================
+
+// 배기팬 이미지 업데이트
+function updateFanImage(fanNumber, isOn) {
+  console.log("###??? 배기팬 이미지 업데이트:", fanNumber, isOn);
+  const fanImage = document.getElementById(`fan${fanNumber}Image`);
+  const fanSettingImage = document.getElementById(
+    `fan${fanNumber}SettingImage`
+  );
+  const imageSrc = isOn ? "fan_on.webp" : "fan_off.webp";
+
+  if (fanImage) {
+    fanImage.src = imageSrc;
+  }
+  if (fanSettingImage) {
+    fanSettingImage.src = imageSrc;
+  }
+}
+
+// ========================================
+// 배기팬 위치 제어 함수
+// ========================================
+
+// 배기팬 위치 변경
+function changeFanPosition(position, save = true) {
+  const fanDisplay = document.querySelector(".fan-display");
+  const positionText = document.getElementById("currentFanPosition");
+
+  if (!fanDisplay) {
+    console.error("배기팬 표시 요소를 찾을 수 없습니다.");
+    return;
+  }
+
+  // 모든 위치 클래스 제거
+  fanDisplay.classList.remove(
+    "position-top-left",
+    "position-top-right",
+    "position-bottom-left",
+    "position-bottom-right"
+  );
+
+  // 새 위치 클래스 추가
+  fanDisplay.classList.add(`position-${position}`);
+
+  // 위치 텍스트 업데이트
+  const positionNames = {
+    "top-left": "왼쪽 상단",
+    "top-right": "우측 상단",
+    "bottom-left": "왼쪽 하단",
+    "bottom-right": "우측 하단",
+  };
+
+  if (positionText) {
+    positionText.textContent = positionNames[position] || position;
+  }
+
+  // localStorage에 저장
+  if (save) {
+    saveFanPosition(position);
+  }
+
+  console.log(`✅ 배기팬 위치 변경: ${positionNames[position]}`);
 }

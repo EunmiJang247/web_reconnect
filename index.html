@@ -57,6 +57,9 @@
       </footer>
     </div>
 
+    <!-- 배기팬 표시 -->
+    <div class="fan-display"></div>
+
     <!-- 설정 모달 -->
     <div class="modal" id="settingsModal">
       <div class="modal-content">
@@ -132,6 +135,76 @@
               </div>
             </div>
           </div>
+
+          <div class="settings-section">
+            <h3>배기팬 표시 위치</h3>
+            <div class="form-group form-control connection-info">
+              <p>화면에서 배기팬 표시 위치를 선택하세요</p>
+              <div
+                style="
+                  display: grid;
+                  grid-template-columns: 1fr 1fr;
+                  gap: 10px;
+                  margin-top: 10px;
+                "
+              >
+                <button
+                  class="btn position-btn"
+                  onclick="changeFanPosition('top-left')"
+                >
+                  왼쪽 상단
+                </button>
+                <button
+                  class="btn position-btn"
+                  onclick="changeFanPosition('top-right')"
+                >
+                  우측 상단
+                </button>
+                <button
+                  class="btn position-btn"
+                  onclick="changeFanPosition('bottom-left')"
+                >
+                  왼쪽 하단
+                </button>
+                <button
+                  class="btn position-btn"
+                  onclick="changeFanPosition('bottom-right')"
+                >
+                  우측 하단
+                </button>
+              </div>
+              <p style="margin-top: 10px; font-size: 14px; color: #666">
+                현재 위치: <span id="currentFanPosition">우측 상단</span>
+              </p>
+            </div>
+          </div>
+
+          <!-- <div class="settings-section">
+            <h3>배기팬 1</h3>
+            <div class="form-group form-control connection-info">
+              <p>배기팬 1 제어</p>
+              <div style="display: flex; align-items: center; gap: 20px;">
+                <img id="fan1SettingImage" src="fan_off.webp" style="width: 60px; height: 60px;" alt="배기팬 1" />
+                <div>
+                  <button class="btn" onclick="callFan1API(true)">팬1 켜기</button>
+                  <button class="btn" onclick="callFan1API(false)">팬1 끄기</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>배기팬 2</h3>
+            <div class="form-group form-control connection-info">
+              <p>배기팬 2 제어</p>
+              <div style="display: flex; align-items: center; gap: 20px;">
+                <img id="fan2SettingImage" src="fan_off.webp" style="width: 60px; height: 60px;" alt="배기팬 2" />
+                <div>
+                  <button class="btn" onclick="callFan2API(true)">팬2 켜기</button>
+                  <button class="btn" onclick="callFan2API(false)">팬2 끄기</button>
+              </div>
+            </div>
+          </div> -->
 
           <div class="settings-section">
             <h3>센서 목록 (<span id="sensorCount">0</span>개)</h3>

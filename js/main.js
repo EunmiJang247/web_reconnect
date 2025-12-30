@@ -10,8 +10,10 @@ document.addEventListener("DOMContentLoaded", function () {
   setupEventListeners(); // 이벤트 리스너 설정
   setupWebSocketCallbacks(); // WebSocket 이벤트 콜백 설정
   loadAlarmMasterSetting(); // 알람 마스터 설정 로드
+  loadFanStates(); // 배기팬 상태 로드
+  loadFanPosition(); // 배기팬 위치 로드
   loadAlertList(); // 경광등 리스트 로드
-  loadSensors(); // 센서 정보 로딩
+  loadSensors(); // 센서 및 팬정보 로딩
 });
 
 // 페이지 종료 시 정리

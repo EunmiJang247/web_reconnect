@@ -10,6 +10,10 @@ let sensorGroupAlarms = new Map();
 let sensorThresholds = new Map(); // 센서별 개별 임계치
 let sensorCustomNames = new Map(); // 센서별 사용자 지정 이름 (시리얼번호 -> 이름)
 
+// 배기팬 데이터
+let fans = []; // 배기팬 포트 정보
+let fanStatus = new Map(); // 포트별 배기팬 상태 (예: COM23 -> {fan1: "ON", fan2: "OFF"})
+
 // 서버 설정
 let serverIp = "localhost";
 let serverPort = "8081";

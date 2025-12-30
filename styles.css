@@ -45,6 +45,58 @@ body {
   min-height: 100vh;
   color: #333;
   line-height: 1.6;
+  position: relative;
+}
+
+/* 배기팬 표시 스타일 */
+.fan-display {
+  position: fixed;
+  z-index: 1000;
+  background: white;
+  border-radius: 10px;
+  padding: 10px 20px;
+  display: flex;
+  gap: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.3s ease;
+}
+
+/* 배기팬 위치 클래스 */
+.fan-display.position-top-left {
+  top: 20px;
+  left: 20px;
+}
+
+.fan-display.position-top-right {
+  top: 20px;
+  right: 20px;
+}
+
+.fan-display.position-bottom-left {
+  bottom: 80px;
+  left: 20px;
+}
+
+.fan-display.position-bottom-right {
+  bottom: 80px;
+  right: 20px;
+}
+
+.fan-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fan-label {
+  font-size: 16px;
+  font-weight: bold;
+  color: #333;
+}
+
+.fan-icon {
+  width: 40px;
+  height: 40px;
 }
 
 .app {
@@ -1223,4 +1275,93 @@ body {
   font-weight: 700;
   font-size: 0.7rem;
   line-height: 1.3;
+}
+
+/* 배기팬 상태 스타일 */
+.fan-status-container {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.fan-status-card {
+  margin-bottom: 1.5rem;
+}
+
+.fan-status-card:last-child {
+  margin-bottom: 0;
+}
+
+.fan-status-card h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #2c3e50;
+  margin-bottom: 1rem;
+  font-family: "Noto Sans KR", "Roboto", sans-serif;
+}
+
+.fan-items {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.fan-item {
+  flex: 1;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: transform 0.2s ease;
+}
+
+.fan-item:hover {
+  transform: translateY(-2px);
+}
+
+.fan-item.fan-on {
+  background: rgba(39, 174, 96, 0.1);
+  border: 2px solid #27ae60;
+}
+
+.fan-item.fan-off {
+  background: rgba(149, 165, 166, 0.1);
+  border: 2px solid #95a5a6;
+}
+
+.fan-item.fan-unknown {
+  background: rgba(241, 196, 15, 0.1);
+  border: 2px solid #f1c40f;
+}
+
+.fan-name {
+  font-weight: 700;
+  font-size: 1rem;
+  color: #2c3e50;
+  font-family: "Roboto", sans-serif;
+}
+
+.fan-status {
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  font-family: "Noto Sans KR", "Roboto", sans-serif;
+}
+
+.fan-on .fan-status {
+  background: #27ae60;
+  color: white;
+}
+
+.fan-off .fan-status {
+  background: #95a5a6;
+  color: white;
+}
+
+.fan-unknown .fan-status {
+  background: #f1c40f;
+  color: #2c3e50;
 }
