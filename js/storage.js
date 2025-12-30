@@ -71,6 +71,7 @@ function saveFanStates() {
 }
 
 // 배기팬 상태 로드
+let fanPollingInterval = null;
 
 async function loadFanStates() {
   try {
@@ -175,6 +176,67 @@ function updateFanDisplay(ports) {
   });
 
   console.log(`✅ 배기팬 ${ports.length}개 표시 완료`);
+}
+
+// 배기팬 상태 폴링 시작 (1초마다)
+function startFanPolling() {
+  // 기존 폴링이 있다면 정리
+  if (fanPollingInterval) {
+    clearInterval(fanPollingInterval);
+  }
+
+  // 1초마다 배기팬 상태 업데이트
+  fanPollingInterval = setInterval(async () => {
+    try {
+      const apiUrl = `http://${serverIp}:${serverPort}/api/fan/health`;
+      const healthResponse = await fetch(apiUrl);
+      const healthData = await healthResponse.json();
+
+      if (healthData.code === 200 && healthData.data.bassoDevices.length > 0) {
+        const portNames = healthData.data.bassoDevices.map(
+          (device) => device.portName
+        );
+        const portNamesParam = portNames.join(",");
+        const apiUrlFan = `http://${serverIp}:${serverPort}/api/fan/status?portNames=${encodeURIComponent(
+          portNamesParam
+        )}`;
+        const statusResponse = await fetch(apiUrlFan);
+        const statusData = await statusResponse.json();
+
+        if (statusData.code === 200 && statusData.data.ports.length > 0) {
+          // 배기팬 상태 업데이트
+          statusData.data.ports.forEach((port, index) => {
+            const fanNumber = index + 1;
+            const isOn = port.fanStatus === "ON";
+
+            // 상태가 변경되었을 때만 업데이트
+            if (fanNumber === 1 && fan1State !== isOn) {
+              fan1State = isOn;
+              updateFanImage(fanNumber, isOn);
+              console.log(`🔄 배기팬${fanNumber} 상태 변경: ${port.fanStatus}`);
+            } else if (fanNumber === 2 && fan2State !== isOn) {
+              fan2State = isOn;
+              updateFanImage(fanNumber, isOn);
+              console.log(`🔄 배기팬${fanNumber} 상태 변경: ${port.fanStatus}`);
+            }
+          });
+        }
+      }
+    } catch (error) {
+      console.error("배기팬 상태 폴링 오류:", error);
+    }
+  }, 1000); // 1초마다 실행
+
+  console.log("✅ 배기팬 상태 폴링 시작 (1초 간격)");
+}
+
+// 배기팬 상태 폴링 중지
+function stopFanPolling() {
+  if (fanPollingInterval) {
+    clearInterval(fanPollingInterval);
+    fanPollingInterval = null;
+    console.log("⏹️ 배기팬 상태 폴링 중지");
+  }
 }
 
 // 배기팬 위치 저장

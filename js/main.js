@@ -12,6 +12,10 @@ document.addEventListener("DOMContentLoaded", function () {
   loadAlarmMasterSetting(); // 알람 마스터 설정 로드
   loadFanStates(); // 배기팬 상태 로드
   loadFanPosition(); // 배기팬 위치 로드
+  // 배기팬 상태를 1초마다 확인하여 실시간 업데이트
+  setTimeout(() => {
+    startFanPolling();
+  }, 2000); // 초기 로드 후 2초 뒤 폴링 시작
   loadAlertList(); // 경광등 리스트 로드
   loadSensors(); // 센서 및 팬정보 로딩
 });
@@ -20,6 +24,7 @@ document.addEventListener("DOMContentLoaded", function () {
 window.addEventListener("beforeunload", function () {
   stopSensorHealthCheck();
   stopSensorListMonitoring();
+  stopFanPolling(); // 배기팬 폴링 중지
   clearTimeout(reconnectTimer);
   wsClient.disconnect();
 });
