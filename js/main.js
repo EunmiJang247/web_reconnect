@@ -17,6 +17,16 @@ document.addEventListener("DOMContentLoaded", function () {
     startFanPolling();
   }, 2000); // 초기 로드 후 2초 뒤 폴링 시작
   loadAlertList(); // 경광등 리스트 로드
+
+  // 테스트용 더미 데이터 생성 및 UI 즉시 렌더링
+  // createDummySensors();
+  // if (sensors.length > 0) {
+  //   showSensorGrid(); // 로딩 숨기고 센서 그리드 표시
+  //   renderSensorCards();
+  //   updateSensorCount();
+  //   updateConnectionStatus("connected", `${sensors.length}개 센서 연결됨`);
+  // }
+
   loadSensors(); // 센서 및 팬정보 로딩
 });
 

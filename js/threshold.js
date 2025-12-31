@@ -46,9 +46,28 @@ function createThresholdSection(sensorId, gasType) {
   const threshold = getSensorThreshold(sensorId, gasType);
   const unit = threshold?.unit || "";
 
+  // O2 센서의 경우 특수한 경고 범위 처리
+  let warningMin, warningMax, dangerLabel, dangerValue;
+  if (gasType === "O2") {
+    warningMin = threshold?.warning_min_low || threshold?.danger_min || 19.5;
+    warningMax = threshold?.warning_max_high || threshold?.danger_max || 23.5;
+    dangerLabel = `위험 범위 (${unit}) - 이 값 미만 또는 초과시 위험`;
+    dangerValue = `${threshold?.danger_min || 19.5} 미만 / ${
+      threshold?.danger_max || 23.5
+    } 초과`;
+  } else {
+    warningMin = threshold?.warning_min || 0;
+    warningMax = threshold?.warning_max || 100;
+    dangerLabel = `위험 최소값 (${unit})`;
+    dangerValue = threshold?.danger_min || 0;
+  }
+
   const section = document.createElement("div");
   section.className = "threshold-section";
-  section.innerHTML = `
+
+  // O2는 읽기 전용 정보로 표시
+  if (gasType === "O2") {
+    section.innerHTML = `
         <h4>
             ${formatGasName(gasType)} 임계치 설정
         </h4>
@@ -56,35 +75,67 @@ function createThresholdSection(sensorId, gasType) {
             <div class="threshold-field">
                 <label>정상 최소값 (${unit})</label>
                 <input type="number" id="normal_min_${gasType}" value="${
-    threshold?.normal_min || 0
-  }" step="0.1">
+      threshold?.normal_min || 0
+    }" step="0.1">
             </div>
             <div class="threshold-field">
                 <label>정상 최대값 (${unit})</label>
                 <input type="number" id="normal_max_${gasType}" value="${
-    threshold?.normal_max || 100
-  }" step="0.1">
+      threshold?.normal_max || 100
+    }" step="0.1">
+            </div>
+            <div class="threshold-field">
+                <label>경고 하한 (${unit})</label>
+                <input type="number" id="warning_min_${gasType}" value="${warningMin}" step="0.1">
+            </div>
+            <div class="threshold-field">
+                <label>경고 상한 (${unit})</label>
+                <input type="number" id="warning_max_${gasType}" value="${warningMax}" step="0.1">
+            </div>
+            <div class="threshold-field" style="grid-column: 1 / -1;">
+                <label>${dangerLabel}</label>
+                <input type="text" value="${dangerValue}" readonly style="background: #f5f5f5;">
+            </div>
+        </div>
+        <p style="color: #666; font-size: 0.9rem; margin-top: 0.5rem;">
+          ※ O2는 ${threshold?.danger_min || 19.5}% 미만 또는 ${
+      threshold?.danger_max || 23.5
+    }% 초과시 위험으로 판정됩니다.
+        </p>
+    `;
+  } else {
+    section.innerHTML = `
+        <h4>
+            ${formatGasName(gasType)} 임계치 설정
+        </h4>
+        <div class="threshold-grid">
+            <div class="threshold-field">
+                <label>정상 최소값 (${unit})</label>
+                <input type="number" id="normal_min_${gasType}" value="${
+      threshold?.normal_min || 0
+    }" step="0.1">
+            </div>
+            <div class="threshold-field">
+                <label>정상 최대값 (${unit})</label>
+                <input type="number" id="normal_max_${gasType}" value="${
+      threshold?.normal_max || 100
+    }" step="0.1">
             </div>
             <div class="threshold-field">
                 <label>경고 최소값 (${unit})</label>
-                <input type="number" id="warning_min_${gasType}" value="${
-    threshold?.warning_min || 0
-  }" step="0.1">
+                <input type="number" id="warning_min_${gasType}" value="${warningMin}" step="0.1">
             </div>
             <div class="threshold-field">
                 <label>경고 최대값 (${unit})</label>
-                <input type="number" id="warning_max_${gasType}" value="${
-    threshold?.warning_max || 100
-  }" step="0.1">
+                <input type="number" id="warning_max_${gasType}" value="${warningMax}" step="0.1">
             </div>
             <div class="threshold-field">
-                <label>위험 최소값 (${unit})</label>
-                <input type="number" id="danger_min_${gasType}" value="${
-    threshold?.danger_min || 0
-  }" step="0.1">
+                <label>${dangerLabel}</label>
+                <input type="number" id="danger_min_${gasType}" value="${dangerValue}" step="0.1">
             </div>
         </div>
     `;
+  }
 
   return section;
 }
@@ -122,9 +173,13 @@ function saveThresholds() {
     const warningMax = parseFloat(
       document.getElementById(`warning_max_${gasType}`).value
     );
-    const dangerMin = parseFloat(
-      document.getElementById(`danger_min_${gasType}`).value
-    );
+
+    // O2는 danger_min 입력 필드가 없으므로 건너뜀
+    let dangerMin;
+    const dangerMinElement = document.getElementById(`danger_min_${gasType}`);
+    if (dangerMinElement && dangerMinElement.type !== "text") {
+      dangerMin = parseFloat(dangerMinElement.value);
+    }
 
     // 유효성 검사
     if (normalMin >= normalMax) {
@@ -132,20 +187,42 @@ function saveThresholds() {
         `${formatGasName(gasType)}: 정상 최소값은 최대값보다 작아야 합니다.`
       );
     }
-    if (warningMin >= warningMax) {
-      errorMessages.push(
-        `${formatGasName(gasType)}: 경고 최소값은 최대값보다 작아야 합니다.`
-      );
-    }
-    if (normalMax > warningMin) {
-      errorMessages.push(
-        `${formatGasName(gasType)}: 경고 최소값은 정상 최대값보다 커야 합니다.`
-      );
-    }
-    if (warningMax > dangerMin) {
-      errorMessages.push(
-        `${formatGasName(gasType)}: 위험 최소값은 경고 최대값보다 커야 합니다.`
-      );
+
+    // O2는 특별한 유효성 검사 (양방향)
+    if (gasType === "O2") {
+      if (warningMin >= normalMin) {
+        errorMessages.push(
+          `${formatGasName(
+            gasType
+          )}: 경고 하한은 정상 최소값보다 작아야 합니다.`
+        );
+      }
+      if (warningMax <= normalMax) {
+        errorMessages.push(
+          `${formatGasName(gasType)}: 경고 상한은 정상 최대값보다 커야 합니다.`
+        );
+      }
+    } else {
+      // 일반 가스 유효성 검사
+      if (warningMin >= warningMax) {
+        errorMessages.push(
+          `${formatGasName(gasType)}: 경고 최소값은 최대값보다 작아야 합니다.`
+        );
+      }
+      if (normalMax > warningMin) {
+        errorMessages.push(
+          `${formatGasName(
+            gasType
+          )}: 경고 최소값은 정상 최대값보다 커야 합니다.`
+        );
+      }
+      if (dangerMin !== undefined && warningMax > dangerMin) {
+        errorMessages.push(
+          `${formatGasName(
+            gasType
+          )}: 위험 최소값은 경고 최대값보다 커야 합니다.`
+        );
+      }
     }
   });
 
@@ -172,20 +249,36 @@ function saveThresholds() {
     const warningMax = parseFloat(
       document.getElementById(`warning_max_${gasType}`).value
     );
-    const dangerMin = parseFloat(
-      document.getElementById(`danger_min_${gasType}`).value
-    );
 
     const threshold = getSensorThreshold(currentThresholdSensorId, gasType);
 
-    sensorThreshold[gasType] = {
-      ...threshold,
-      normal_min: normalMin,
-      normal_max: normalMax,
-      warning_min: warningMin,
-      warning_max: warningMax,
-      danger_min: dangerMin,
-    };
+    // O2는 특수한 구조로 저장
+    if (gasType === "O2") {
+      sensorThreshold[gasType] = {
+        ...threshold,
+        normal_min: normalMin,
+        normal_max: normalMax,
+        warning_min_low: warningMin,
+        warning_max_low: normalMin,
+        warning_min_high: normalMax,
+        warning_max_high: warningMax,
+        danger_min: warningMin,
+        danger_max: warningMax,
+      };
+    } else {
+      const dangerMin = parseFloat(
+        document.getElementById(`danger_min_${gasType}`).value
+      );
+
+      sensorThreshold[gasType] = {
+        ...threshold,
+        normal_min: normalMin,
+        normal_max: normalMax,
+        warning_min: warningMin,
+        warning_max: warningMax,
+        danger_min: dangerMin,
+      };
+    }
   });
 
   console.log(`센서 ${currentThresholdSensorId}의 임계치 저장 완료`);
