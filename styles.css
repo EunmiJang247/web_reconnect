@@ -55,8 +55,8 @@ body {
   background: white;
   border-radius: 10px;
   padding: 10px 20px;
-  display: flex;
-  flex-direction: row;
+  display: flex !important;
+  flex-direction: row !important;
   gap: 30px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   transition: all 0.3s ease;
