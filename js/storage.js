@@ -107,7 +107,7 @@ async function loadFanStates() {
         // 각 배기팬 상태 업데이트
         statusData.data.ports.forEach((port, index) => {
           const fanNumber = index + 1;
-          const isOn = port.fanStatus === "ON";
+          const isOn = port.fanStatus === "ON"; // UNKNOWN이면 OFF와 동일하게 처리
 
           // 배기팬 상태 업데이트
           if (fanNumber === 1) {
@@ -157,7 +157,7 @@ function updateFanDisplay(ports) {
   // 각 배기팬 항목 생성
   ports.forEach((port, index) => {
     const fanNumber = index + 1;
-    const isOn = port.fanStatus === "ON";
+    const isOn = port.fanStatus === "ON"; // UNKNOWN이면 OFF와 동일하게 처리
     const imageSrc = isOn ? "fan_on.webp" : "fan_off.webp";
 
     const fanItem = document.createElement("div");
@@ -207,7 +207,7 @@ function startFanPolling() {
           // 배기팬 상태 업데이트
           statusData.data.ports.forEach((port, index) => {
             const fanNumber = index + 1;
-            const isOn = port.fanStatus === "ON";
+            const isOn = port.fanStatus === "ON"; // UNKNOWN이면 OFF와 동일하게 처리
 
             // 상태가 변경되었을 때만 업데이트
             if (fanNumber === 1 && fan1State !== isOn) {
