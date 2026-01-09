@@ -192,34 +192,54 @@ function startFanPolling() {
       const healthResponse = await fetch(apiUrl);
       const healthData = await healthResponse.json();
 
-      if (healthData.code === 200 && healthData.data.bassoDevices.length > 0) {
-        const portNames = healthData.data.bassoDevices.map(
-          (device) => device.portName
-        );
-        const portNamesParam = portNames.join(",");
-        const apiUrlFan = `http://${serverIp}:${serverPort}/api/fan/status?portNames=${encodeURIComponent(
-          portNamesParam
-        )}`;
-        const statusResponse = await fetch(apiUrlFan);
-        const statusData = await statusResponse.json();
+      if (healthData.code === 200) {
+        if (healthData.data.bassoDevices.length > 0) {
+          // 팬이 연결되어 있음
+          const portNames = healthData.data.bassoDevices.map(
+            (device) => device.portName
+          );
+          const portNamesParam = portNames.join(",");
+          const apiUrlFan = `http://${serverIp}:${serverPort}/api/fan/status?portNames=${encodeURIComponent(
+            portNamesParam
+          )}`;
+          const statusResponse = await fetch(apiUrlFan);
+          const statusData = await statusResponse.json();
 
-        if (statusData.code === 200 && statusData.data.ports.length > 0) {
-          // 배기팬 상태 업데이트
-          statusData.data.ports.forEach((port, index) => {
-            const fanNumber = index + 1;
-            const isOn = port.fanStatus === "ON"; // UNKNOWN이면 OFF와 동일하게 처리
+          if (statusData.code === 200 && statusData.data.ports.length > 0) {
+            // 배기팬 상태 업데이트
+            statusData.data.ports.forEach((port, index) => {
+              const fanNumber = index + 1;
+              const isOn = port.fanStatus === "ON"; // UNKNOWN이면 OFF와 동일하게 처리
 
-            // 상태가 변경되었을 때만 업데이트
-            if (fanNumber === 1 && fan1State !== isOn) {
-              fan1State = isOn;
-              updateFanImage(fanNumber, isOn);
-              console.log(`🔄 배기팬${fanNumber} 상태 변경: ${port.fanStatus}`);
-            } else if (fanNumber === 2 && fan2State !== isOn) {
-              fan2State = isOn;
-              updateFanImage(fanNumber, isOn);
-              console.log(`🔄 배기팬${fanNumber} 상태 변경: ${port.fanStatus}`);
-            }
-          });
+              // 상태가 변경되었을 때만 업데이트
+              if (fanNumber === 1 && fan1State !== isOn) {
+                fan1State = isOn;
+                updateFanImage(fanNumber, isOn);
+                console.log(
+                  `🔄 배기팬${fanNumber} 상태 변경: ${port.fanStatus}`
+                );
+              } else if (fanNumber === 2 && fan2State !== isOn) {
+                fan2State = isOn;
+                updateFanImage(fanNumber, isOn);
+                console.log(
+                  `🔄 배기팬${fanNumber} 상태 변경: ${port.fanStatus}`
+                );
+              }
+            });
+          }
+        } else {
+          // 팬이 연결 해제됨 (bassoDevices가 빈 배열)
+          console.log("🗑️ 모든 배기팬 연결 해제 감지");
+
+          // 모든 팬 이미지 제거
+          if (fan1State !== null) {
+            removeFanImage(1);
+            fan1State = null;
+          }
+          if (fan2State !== null) {
+            removeFanImage(2);
+            fan2State = null;
+          }
         }
       }
     } catch (error) {

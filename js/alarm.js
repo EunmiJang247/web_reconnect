@@ -280,9 +280,27 @@ function updateFanImage(fanNumber, isOn) {
 
   if (fanImage) {
     fanImage.src = imageSrc;
+    fanImage.style.display = "block";
   }
   if (fanSettingImage) {
     fanSettingImage.src = imageSrc;
+    fanSettingImage.style.display = "block";
+  }
+}
+
+// 배기팬 이미지 제거 (연결 해제 시)
+function removeFanImage(fanNumber) {
+  console.log(`🗑️ 배기팬${fanNumber} 이미지 제거 (연결 해제됨)`);
+  const fanImage = document.getElementById(`fan${fanNumber}Image`);
+  const fanSettingImage = document.getElementById(
+    `fan${fanNumber}SettingImage`
+  );
+
+  if (fanImage) {
+    fanImage.style.display = "none";
+  }
+  if (fanSettingImage) {
+    fanSettingImage.style.display = "none";
   }
 }
 
